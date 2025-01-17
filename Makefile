@@ -7,16 +7,16 @@ all: main
 main: main.o Settings.o InputHandler.o Utility.o
 	$(CXX) -o main main.o Settings.o InputHandler.o Utility.o $(LDFLAGS)
 
-main.o: main.cpp Settings.h InputHandler.h Utility.h
+main.o: src/main.cpp src/Settings.h src/InputHandler.h src/Utility.h
 	$(CXX) $(CXXFLAGS) -c main.cpp
 
-Settings.o: Settings.cpp Settings.h Utility.h
+Settings.o: src/Settings.cpp src/Settings.h src/Utility.h
 	$(CXX) $(CXXFLAGS) -c Settings.cpp
 
-InputHandler.o: InputHandler.cpp InputHandler.h Settings.h Utility.h
+InputHandler.o: src/InputHandler.cpp src/InputHandler.h src/Settings.h src/Utility.h
 	$(CXX) $(CXXFLAGS) -c InputHandler.cpp
 
-Utility.o: Utility.cpp Utility.h
+Utility.o: src/Utility.cpp src/Utility.h
 	$(CXX) $(CXXFLAGS) -c Utility.cpp
 
 clean:

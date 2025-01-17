@@ -3,13 +3,13 @@ project(pttcpp)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(pttcpp main.cpp
-        Utility.h
-        Utility.cpp
-        Settings.h
-        Settings.cpp
-        InputHandler.cpp
-        InputHandler.h)
+add_executable(pttcpp src/main.cpp
+        src/Utility.h
+        src/Utility.cpp
+        src/Settings.h
+        src/Settings.cpp
+        src/InputHandler.cpp
+        src/InputHandler.h)
 
 
 find_package(PkgConfig REQUIRED)

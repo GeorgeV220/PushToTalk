@@ -1,10 +1,7 @@
 #include <fcntl.h>
 #include <gtk/gtk.h>
-#include <sys/ioctl.h>
 #include <iostream>
 #include <linux/input.h>
-#include <unistd.h>
-#include <cstring>
 
 #include "InputHandler.h"
 #include "Utility.h"
