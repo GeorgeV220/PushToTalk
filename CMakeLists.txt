@@ -9,7 +9,9 @@ add_executable(pttcpp src/main.cpp
         src/Settings.h
         src/Settings.cpp
         src/InputHandler.cpp
-        src/InputHandler.h)
+        src/InputHandler.h
+        src/gui/SettingsGUI.cpp
+        src/gui/SettingsGUI.h)
 
 
 find_package(PkgConfig REQUIRED)
