@@ -7,6 +7,11 @@
 #include <string>
 #include <pwd.h>
 
+#include <AL/al.h>
+#include <AL/alc.h>
+#include <mpg123.h>
+#include <vector>
+
 class Utility {
 public:
     static bool debug;
@@ -78,6 +83,92 @@ public:
         if (system(command.c_str()) == -1) {
             error("Failed to execute pactl command");
         }
+    }
+
+    static void playSound(const char *fileName) {
+
+        if (mpg123_init() != MPG123_OK) {
+            error("Failed to initiate mpg123");
+            return;
+        }
+
+        mpg123_handle *mh = mpg123_new(nullptr, nullptr);
+        if (!mh) {
+            error("Failed to create mpg123 handle");
+            return;
+        }
+
+        if (mpg123_open(mh, fileName) != MPG123_OK) {
+            error("Failed to open sound file");
+            mpg123_delete(mh);
+            return;
+        }
+
+        long rate;
+        int channels, encoding;
+        if (mpg123_getformat(mh, &rate, &channels, &encoding) != MPG123_OK) {
+            error("Failed to retrieve sound file format");
+            mpg123_close(mh);
+            mpg123_delete(mh);
+            return;
+        }
+
+        std::vector<unsigned char> buffer(4096);
+        std::vector<unsigned char> pcm_data;
+        size_t done;
+        int err;
+
+        while ((err = mpg123_read(mh, buffer.data(), buffer.size(), &done)) == MPG123_OK) {
+            pcm_data.insert(pcm_data.end(), buffer.begin(), buffer.begin() + done);
+        }
+
+        if (err != MPG123_DONE && err != MPG123_OK) {
+            error("Failed to read sound file");
+            mpg123_close(mh);
+            mpg123_delete(mh);
+            mpg123_exit();
+            return;
+        }
+
+        mpg123_close(mh);
+        mpg123_delete(mh);
+        mpg123_exit();
+
+        ALCdevice *device = alcOpenDevice(nullptr);
+        if (!device) {
+            error("Failed to open audio device");
+            return;
+        }
+
+        ALCcontext *context = alcCreateContext(device, nullptr);
+        alcMakeContextCurrent(context);
+
+        ALuint buffer_id;
+        ALuint source;
+
+        alGenBuffers(1, &buffer_id);
+        alGenSources(1, &source);
+
+        const ALenum format = (channels == 1) ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16;
+
+        alBufferData(buffer_id, format, pcm_data.data(), pcm_data.size(), rate);
+
+        alSourcei(source, AL_BUFFER, buffer_id);
+
+        alSourcef(source, AL_GAIN, 0.1f);
+
+        alSourcePlay(source);
+
+        ALint state;
+        do {
+            alGetSourcei(source, AL_SOURCE_STATE, &state);
+        } while (state == AL_PLAYING);
+
+        alDeleteSources(1, &source);
+        alDeleteBuffers(1, &buffer_id);
+        alcMakeContextCurrent(nullptr);
+        alcDestroyContext(context);
+        alcCloseDevice(device);
     }
 };
 
