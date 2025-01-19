@@ -2,11 +2,11 @@
 
 #include <cstdint>
 #include <cstring>
-
-#include "Utility.h"
 #include <fcntl.h>
 #include <unistd.h>
 #include <linux/input.h>
+
+#include "Utility.h"
 
 InputHandler::InputHandler() : fd(-1) {
     settings.loadSettings();
@@ -24,34 +24,44 @@ bool InputHandler::initializeDevice() {
         Utility::error("Failed to open input device: " + settings.sDevice);
         return false;
     }
+
     Utility::print("Input device opened: " + settings.sDevice);
     return true;
 }
 
 void InputHandler::processEvents() const {
-    input_event ie{};
-    bool buttonPressed = false;
-    bool button2Pressed = false;
+    input_event event{};
+    bool isButton1Pressed = false;
+    bool isButton2Pressed = false;
+    int previousButton1State = 0;
+    int previousButton2State = 0;
 
     while (true) {
-        if (const ssize_t bytes = read(fd, &ie, sizeof(struct input_event)); bytes == -1) {
-            Utility::pError("Read error");
+        if (const ssize_t bytesRead = read(fd, &event, sizeof(input_event)); bytesRead == -1) {
+            Utility::pError("Error reading input event");
             return;
         }
 
-        if (ie.type == EV_KEY) {
-            Utility::debugPrint("Key pressed: " + std::to_string(ie.code));
-            if (ie.code == settings.sButton) {
-                Utility::debugPrint("Button " + std::to_string(ie.code) + (ie.value ? " pressed" : " released"));
-                buttonPressed = ie.value;
-            } else if (ie.code == settings.sButton2) {
-                Utility::debugPrint("Button " + std::to_string(ie.code) + (ie.value ? " pressed" : " released"));
-                button2Pressed = ie.value;
-                Utility::setMicMute(!button2Pressed);
+        if (event.type == EV_KEY) {
+            if (event.code == settings.sButton) {
+                isButton1Pressed = event.value;
+                if (previousButton1State != isButton1Pressed) {
+                    previousButton1State = isButton1Pressed;
+                    Utility::debugPrint("Button 1 " + std::string(isButton1Pressed ? "pressed" : "released"));
+                }
+            } else if (event.code == settings.sButton2) {
+                isButton2Pressed = event.value;
+                if (previousButton2State != isButton2Pressed) {
+                    Utility::debugPrint("Button 2 " + std::string(isButton2Pressed ? "pressed" : "released"));
+                    previousButton2State = isButton2Pressed;
+
+                    Utility::playSound((!isButton2Pressed ? settings.sPttOffPath : settings.sPttOnPath).c_str());
+                    Utility::setMicMute(!isButton2Pressed);
+                }
             }
 
-            if (buttonPressed && button2Pressed) {
-                Utility::print("Both buttons pressed, shutting down.");
+            if (isButton1Pressed && isButton2Pressed) {
+                Utility::print("Both buttons pressed. Shutting down.");
                 Utility::setMicMute(true);
                 break;
             }

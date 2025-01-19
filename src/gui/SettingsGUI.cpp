@@ -22,13 +22,17 @@ void onApplyButtonClicked(const GtkButton *button, const gpointer data) {
     const char *device = gtk_entry_get_text(entries[0]);
     const ConversionResult button1Result = Settings::safeAtoi(gtk_entry_get_text(entries[1]));
     const ConversionResult button2Result = Settings::safeAtoi(gtk_entry_get_text(entries[2]));
+    const std::string pttOnPath = gtk_entry_get_text(entries[3]);
+    const std::string pttOffPath = gtk_entry_get_text(entries[4]);
 
     if (button1Result.success && button2Result.success) {
         Settings settings;
         settings.saveSettings(
             device,
             button1Result.value,
-            button2Result.value
+            button2Result.value,
+            pttOnPath,
+            pttOffPath
         );
         Utility::print("Settings saved.");
         if (quit) {
@@ -104,6 +108,34 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
                                 "Enter the button code for the second button (e.g., 275 for BTN_SIDE)");
     gtk_grid_attach(GTK_GRID(grid), button2InfoButton, 2, 2, 1, 1);
 
+    GtkWidget *pttOnLabel = gtk_label_new("PTT on:");
+    GtkWidget *pttOnEntry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(pttOnEntry), settings.sPttOnPath.c_str());
+
+    gtk_widget_set_hexpand(pttOnEntry, TRUE);
+    gtk_widget_set_vexpand(pttOnEntry, FALSE);
+
+    gtk_grid_attach(GTK_GRID(grid), pttOnLabel, 0, 3, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), pttOnEntry, 1, 3, 1, 1);
+
+    GtkWidget *pttOnInfoButton = gtk_button_new_with_label("!");
+    gtk_widget_set_tooltip_text(pttOnInfoButton, "Enter the path to the PTT on sound file");
+    gtk_grid_attach(GTK_GRID(grid), pttOnInfoButton, 2, 3, 1, 1);
+
+    GtkWidget *pttOffLabel = gtk_label_new("PTT off:");
+    GtkWidget *pttOffEntry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(pttOffEntry), settings.sPttOffPath.c_str());
+
+    gtk_widget_set_hexpand(pttOffEntry, TRUE);
+    gtk_widget_set_vexpand(pttOffEntry, FALSE);
+
+    gtk_grid_attach(GTK_GRID(grid), pttOffLabel, 0, 4, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), pttOffEntry, 1, 4, 1, 1);
+
+    GtkWidget *pttOffInfoButton = gtk_button_new_with_label("!");
+    gtk_widget_set_tooltip_text(pttOffInfoButton, "Enter the path to the PTT off sound file");
+    gtk_grid_attach(GTK_GRID(grid), pttOffInfoButton, 2, 4, 1, 1);
+
     GtkWidget *applyAndQuitButton = gtk_button_new_with_label("Apply and Quit");
     GtkWidget *applyButton = gtk_button_new_with_label("Apply");
     GtkWidget *quitButton = gtk_button_new_with_label("Quit");
@@ -122,6 +154,8 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
     entries[0] = GTK_ENTRY(deviceEntry);
     entries[1] = GTK_ENTRY(button1Entry);
     entries[2] = GTK_ENTRY(button2Entry);
+    entries[3] = GTK_ENTRY(pttOnEntry);
+    entries[4] = GTK_ENTRY(pttOffEntry);
 
     auto *applyAndQuitData = new ButtonData{entries, true};
     auto *applyOnlyData = new ButtonData{entries, false};

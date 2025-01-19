@@ -20,6 +20,8 @@ public:
     std::string sDevice;
     int sButton;
     int sButton2;
+    std::string sPttOnPath;
+    std::string sPttOffPath;
 
     Settings();
 
@@ -27,7 +29,7 @@ public:
 
     void loadSettings();
 
-    void saveSettings(const std::string &device, int button1, int button2);
+    void saveSettings(const std::string &device, int button1, int button2, std::string pttOnPath, std::string pttOffPath);
 
     static void setPath(const std::string &path);
 };
