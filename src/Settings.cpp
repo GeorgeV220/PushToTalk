@@ -13,10 +13,11 @@
 #define DEFAULT_BUTTON2 BTN_SIDE
 #define PTT_ON_PATH "/home/<user>/Music/ptt_on.mp3"
 #define PTT_OFF_PATH "/home/<user>/Music/ptt_off.mp3"
+#define DEFAULT_VOLUME 0.1f
 
 Settings::Settings() : sDevice(DEFAULT_DEVICE), sButton(DEFAULT_BUTTON),
                        sButton2(DEFAULT_BUTTON2), sPttOnPath(PTT_ON_PATH),
-                       sPttOffPath(PTT_OFF_PATH) {
+                       sPttOffPath(PTT_OFF_PATH), sVolume(DEFAULT_VOLUME) {
     const char *homeDir = nullptr;
 
     if (const char *sudoUser = getenv("SUDO_USER")) {
@@ -63,7 +64,8 @@ void Settings::saveSettings(
     int button1,
     int button2,
     std::string pttOnPath,
-    std::string pttOffPath
+    std::string pttOffPath,
+    float volume
 ) {
     sDevice = device;
     sButton = button1;

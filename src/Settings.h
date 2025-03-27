@@ -22,6 +22,7 @@ public:
     int sButton2;
     std::string sPttOnPath;
     std::string sPttOffPath;
+    float sVolume;
 
     Settings();
 
@@ -29,7 +30,7 @@ public:
 
     void loadSettings();
 
-    void saveSettings(const std::string &device, int button1, int button2, std::string pttOnPath, std::string pttOffPath);
+    void saveSettings(const std::string &device, int button1, int button2, std::string pttOnPath, std::string pttOffPath, float volume);
 
     static void setPath(const std::string &path);
 };

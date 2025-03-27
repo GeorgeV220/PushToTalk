@@ -10,7 +10,7 @@ int main(const int argc, char *argv[]) {
         if (std::string arg = argv[i]; arg == "--debug") {
             Utility::debug = true;
         } else if (arg == "--gui") {
-            SettingsGUI::showSettingsGui(handler.getSettings());
+            SettingsGUI::showSettingsGui(Utility::settings);
             return 0;
         }
     }

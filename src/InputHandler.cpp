@@ -8,6 +8,8 @@
 
 #include "Utility.h"
 
+#define settings Utility::settings
+
 InputHandler::InputHandler() : fd(-1) {
     settings.loadSettings();
 }

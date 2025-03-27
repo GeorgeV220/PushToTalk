@@ -12,9 +12,13 @@
 #include <mpg123.h>
 #include <vector>
 
+#include "Settings.h"
+
 class Utility {
 public:
     static bool debug;
+
+    static Settings settings;
 
     static void print(const std::string &message) {
         std::cout << message << std::endl;
@@ -86,7 +90,6 @@ public:
     }
 
     static void playSound(const char *fileName) {
-
         if (mpg123_init() != MPG123_OK) {
             error("Failed to initiate mpg123");
             return;
@@ -155,7 +158,7 @@ public:
 
         alSourcei(source, AL_BUFFER, buffer_id);
 
-        alSourcef(source, AL_GAIN, 0.1f);
+        alSourcef(source, AL_GAIN, settings.sVolume);
 
         alSourcePlay(source);
 

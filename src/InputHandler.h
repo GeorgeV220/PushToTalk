@@ -4,7 +4,6 @@
 #include "Settings.h"
 
 class InputHandler {
-    Settings settings;
     int fd;
 
 public:
@@ -15,10 +14,6 @@ public:
     bool initializeDevice();
 
     void processEvents() const;
-
-    Settings getSettings() const {
-        return settings;
-    }
 };
 
 #endif // INPUTHANDLER_H

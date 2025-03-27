@@ -24,15 +24,16 @@ void onApplyButtonClicked(const GtkButton *button, const gpointer data) {
     const ConversionResult button2Result = Settings::safeAtoi(gtk_entry_get_text(entries[2]));
     const std::string pttOnPath = gtk_entry_get_text(entries[3]);
     const std::string pttOffPath = gtk_entry_get_text(entries[4]);
+    const float volume = std::stof(gtk_entry_get_text(entries[5]));
 
     if (button1Result.success && button2Result.success) {
-        Settings settings;
-        settings.saveSettings(
+        Utility::settings.saveSettings(
             device,
             button1Result.value,
             button2Result.value,
             pttOnPath,
-            pttOffPath
+            pttOffPath,
+            volume
         );
         Utility::print("Settings saved.");
         if (quit) {
@@ -49,7 +50,7 @@ void onQuitButtonClicked(const GtkButton *button) {
 }
 
 void SettingsGUI::showSettingsGui(const Settings &settings) {
-    GtkEntry *entries[5];
+    GtkEntry *entries[6];
     gtk_init(nullptr, nullptr);
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -136,6 +137,21 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
     gtk_widget_set_tooltip_text(pttOffInfoButton, "Enter the path to the PTT off sound file");
     gtk_grid_attach(GTK_GRID(grid), pttOffInfoButton, 2, 4, 1, 1);
 
+    GtkWidget *volumeLabel = gtk_label_new("Volume:");
+    GtkWidget *volumeEntry = gtk_entry_new();
+    const std::string volumeText = std::to_string(settings.sVolume);
+    gtk_entry_set_text(GTK_ENTRY(volumeEntry), volumeText.c_str());
+
+    gtk_widget_set_hexpand(volumeEntry, TRUE);
+    gtk_widget_set_vexpand(volumeEntry, FALSE);
+
+    gtk_grid_attach(GTK_GRID(grid), volumeLabel, 0, 5, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), volumeEntry, 1, 5, 1, 1);
+
+    GtkWidget *volumeInfoButton = gtk_button_new_with_label("!");
+    gtk_widget_set_tooltip_text(volumeInfoButton, "Enter the volume (0.0 - 1.0)");
+    gtk_grid_attach(GTK_GRID(grid), volumeInfoButton, 2, 5, 1, 1);
+
     GtkWidget *applyAndQuitButton = gtk_button_new_with_label("Apply and Quit");
     GtkWidget *applyButton = gtk_button_new_with_label("Apply");
     GtkWidget *quitButton = gtk_button_new_with_label("Quit");
@@ -147,15 +163,16 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
     gtk_widget_set_hexpand(quitButton, TRUE);
     gtk_widget_set_vexpand(quitButton, FALSE);
 
-    gtk_grid_attach(GTK_GRID(grid), applyAndQuitButton, 0, 5, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), applyButton, 1, 5, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), quitButton, 2, 5, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), applyAndQuitButton, 0, 6, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), applyButton, 1, 6, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), quitButton, 2, 6, 1, 1);
 
     entries[0] = GTK_ENTRY(deviceEntry);
     entries[1] = GTK_ENTRY(button1Entry);
     entries[2] = GTK_ENTRY(button2Entry);
     entries[3] = GTK_ENTRY(pttOnEntry);
     entries[4] = GTK_ENTRY(pttOffEntry);
+    entries[5] = GTK_ENTRY(volumeEntry);
 
     auto *applyAndQuitData = new ButtonData{entries, true};
     auto *applyOnlyData = new ButtonData{entries, false};
