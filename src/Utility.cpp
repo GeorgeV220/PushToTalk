@@ -25,14 +25,6 @@ std::vector<ALuint> Utility::sourcePool;
 std::map<std::string, ALuint> Utility::bufferCache;
 std::mutex Utility::audioMutex;
 
-static Settings settings;
-
-static ALCdevice *alDevice;
-static ALCcontext *alContext;
-static std::vector<ALuint> sourcePool;
-static std::map<std::string, ALuint> bufferCache;
-static std::mutex audioMutex;
-
 void Utility::print(const std::string &message) {
     std::cout << message << std::endl;
 }
