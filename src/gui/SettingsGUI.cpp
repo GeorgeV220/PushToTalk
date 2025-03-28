@@ -27,7 +27,7 @@ void onApplyButtonClicked(const GtkButton *button, const gpointer data) {
     const float volume = std::stof(gtk_entry_get_text(entries[5]));
 
     if (button1Result.success && button2Result.success) {
-        Utility::settings.saveSettings(
+        Settings::settings.saveSettings(
             device,
             button1Result.value,
             button2Result.value,
@@ -49,7 +49,7 @@ void onQuitButtonClicked(const GtkButton *button) {
     gtk_main_quit();
 }
 
-void SettingsGUI::showSettingsGui(const Settings &settings) {
+void SettingsGUI::showSettingsGui() {
     GtkEntry *entries[6];
     gtk_init(nullptr, nullptr);
 
@@ -65,7 +65,7 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
 
     GtkWidget *deviceLabel = gtk_label_new("Device:");
     GtkWidget *deviceEntry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(deviceEntry), settings.sDevice.c_str());
+    gtk_entry_set_text(GTK_ENTRY(deviceEntry), Settings::settings.sDevice.c_str());
 
     gtk_widget_set_hexpand(deviceEntry, TRUE);
     gtk_widget_set_vexpand(deviceEntry, FALSE);
@@ -79,7 +79,7 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
 
     GtkWidget *button1Label = gtk_label_new("Button 1:");
     GtkWidget *button1Entry = gtk_entry_new();
-    const std::string button1Text = std::to_string(settings.sButton);
+    const std::string button1Text = std::to_string(Settings::settings.sButton);
     gtk_entry_set_text(GTK_ENTRY(button1Entry), button1Text.c_str());
 
     gtk_widget_set_hexpand(button1Entry, TRUE);
@@ -95,7 +95,7 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
 
     GtkWidget *button2Label = gtk_label_new("Button 2:");
     GtkWidget *button2Entry = gtk_entry_new();
-    const std::string button2Text = std::to_string(settings.sButton2);
+    const std::string button2Text = std::to_string(Settings::settings.sButton2);
     gtk_entry_set_text(GTK_ENTRY(button2Entry), button2Text.c_str());
 
     gtk_widget_set_hexpand(button2Entry, TRUE);
@@ -111,7 +111,7 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
 
     GtkWidget *pttOnLabel = gtk_label_new("PTT on:");
     GtkWidget *pttOnEntry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(pttOnEntry), settings.sPttOnPath.c_str());
+    gtk_entry_set_text(GTK_ENTRY(pttOnEntry), Settings::settings.sPttOnPath.c_str());
 
     gtk_widget_set_hexpand(pttOnEntry, TRUE);
     gtk_widget_set_vexpand(pttOnEntry, FALSE);
@@ -125,7 +125,7 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
 
     GtkWidget *pttOffLabel = gtk_label_new("PTT off:");
     GtkWidget *pttOffEntry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(pttOffEntry), settings.sPttOffPath.c_str());
+    gtk_entry_set_text(GTK_ENTRY(pttOffEntry), Settings::settings.sPttOffPath.c_str());
 
     gtk_widget_set_hexpand(pttOffEntry, TRUE);
     gtk_widget_set_vexpand(pttOffEntry, FALSE);
@@ -139,7 +139,7 @@ void SettingsGUI::showSettingsGui(const Settings &settings) {
 
     GtkWidget *volumeLabel = gtk_label_new("Volume:");
     GtkWidget *volumeEntry = gtk_entry_new();
-    const std::string volumeText = std::to_string(settings.sVolume);
+    const std::string volumeText = std::to_string(Settings::settings.sVolume);
     gtk_entry_set_text(GTK_ENTRY(volumeEntry), volumeText.c_str());
 
     gtk_widget_set_hexpand(volumeEntry, TRUE);

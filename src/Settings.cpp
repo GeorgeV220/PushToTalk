@@ -15,6 +15,9 @@
 #define PTT_OFF_PATH "/home/<user>/Music/ptt_off.mp3"
 #define DEFAULT_VOLUME 0.1f
 
+// static
+Settings Settings::settings;
+
 Settings::Settings() : sDevice(DEFAULT_DEVICE), sButton(DEFAULT_BUTTON),
                        sButton2(DEFAULT_BUTTON2), sPttOnPath(PTT_ON_PATH),
                        sPttOffPath(PTT_OFF_PATH), sVolume(DEFAULT_VOLUME) {

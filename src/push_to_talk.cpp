@@ -8,12 +8,12 @@ PushToTalk::~PushToTalk() { Utility::cleanupAudioSystem(); }
 
 int PushToTalk::run() {
     try {
-        VirtualInputProxy proxy(Utility::settings.sDevice, Utility::settings.sButton2);
+        VirtualInputProxy proxy(Settings::settings.sDevice, Settings::settings.sButton2);
 
         proxy.set_callback([](const bool pressed) {
             Utility::debugPrint("Button 2 " + std::string(pressed ? "pressed" : "released"));
 
-            Utility::playSound((!pressed ? Utility::settings.sPttOffPath : Utility::settings.sPttOnPath).c_str());
+            Utility::playSound((!pressed ? Settings::settings.sPttOffPath : Settings::settings.sPttOnPath).c_str());
             Utility::setMicMute(!pressed);
         });
 

@@ -1,11 +1,9 @@
 #ifndef SETTINGSGUI_H
 #define SETTINGSGUI_H
 
-#include "../Settings.h"
-
 class SettingsGUI {
 public:
-    static void showSettingsGui(const Settings &settings);
+    static void showSettingsGui();
 };
 
 #endif //SETTINGSGUI_H

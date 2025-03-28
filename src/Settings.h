@@ -17,6 +17,7 @@ private:
     std::string configDirPath;
 
 public:
+    static Settings settings;
     std::string sDevice;
     int sButton;
     int sButton2;

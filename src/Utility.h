@@ -7,13 +7,11 @@
 #include <mutex>
 #include <AL/al.h>
 #include <AL/alc.h>
-#include "Settings.h"
 
 class Utility {
 public:
     // Static members
     static bool debug;
-    static Settings settings;
     static ALCdevice* alDevice;
     static ALCcontext* alContext;
     static std::vector<ALuint> sourcePool;

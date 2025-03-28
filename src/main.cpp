@@ -4,12 +4,12 @@
 
 
 int main(const int argc, char *argv[]) {
-    Utility::settings.loadSettings();
+    Settings::settings.loadSettings();
     for (int i = 1; i < argc; ++i) {
         if (std::string arg = argv[i]; arg == "--debug") {
             Utility::debug = true;
         } else if (arg == "--gui") {
-            SettingsGUI::showSettingsGui(Utility::settings);
+            SettingsGUI::showSettingsGui();
             return 0;
         }
     }

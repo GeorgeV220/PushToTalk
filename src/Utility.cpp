@@ -17,7 +17,6 @@
 #include "Settings.h"
 
 bool Utility::debug = false;
-Settings Utility::settings;
 
 ALCdevice *Utility::alDevice = nullptr;
 ALCcontext *Utility::alContext = nullptr;
@@ -185,7 +184,7 @@ void Utility::playSound(const char *fileName) {
     sourcePool.pop_back();
 
     alSourcei(source, AL_BUFFER, bufferId);
-    alSourcef(source, AL_GAIN, settings.sVolume);
+    alSourcef(source, AL_GAIN, Settings::settings.sVolume);
     alSourcePlay(source);
 
     std::thread([source]() {
