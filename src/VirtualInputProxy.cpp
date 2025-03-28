@@ -158,8 +158,6 @@ private:
             if (callback_) callback_(ev.value);
         } else {
             write(ufd_, &ev, sizeof(ev));
-            constexpr input_event syn = {.time = {}, .type = EV_SYN, .code = SYN_REPORT, .value = 0};
-            write(ufd_, &syn, sizeof(syn));
         }
     }
 
