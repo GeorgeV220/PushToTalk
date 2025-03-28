@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(pttcpp
         src/main.cpp
+        src/push_to_talk.cpp
+        src/push_to_talk.h
         src/Utility.h
         src/Utility.cpp
         src/Settings.h

@@ -1,11 +1,10 @@
 #include "InputHandler.h"
+#include "push_to_talk.h"
 #include "Utility.h"
 #include "gui/SettingsGUI.h"
 
 
 int main(const int argc, char *argv[]) {
-    InputHandler handler;
-
     for (int i = 1; i < argc; ++i) {
         if (std::string arg = argv[i]; arg == "--debug") {
             Utility::debug = true;
@@ -15,12 +14,6 @@ int main(const int argc, char *argv[]) {
         }
     }
 
-
-    if (!handler.initializeDevice()) {
-        return 1;
-    }
-
-
-    handler.processEvents();
-    return 0;
+    PushToTalk app;
+    return app.run();
 }

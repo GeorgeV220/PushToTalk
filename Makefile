@@ -1,23 +1,32 @@
-CXX = g++
-CXXFLAGS = -std=c++17 `pkg-config --cflags gtk+-3.0` -I/usr/include/openal -I/usr/include/mpg123
-LDFLAGS = `pkg-config --libs gtk+-3.0` -lopenal -lmpg123
+# Compiler and flags
+CXX := g++
+CXXFLAGS := -std=c++20 -Wall -Wextra
+INCLUDES := $(shell pkg-config --cflags gtk+-3.0) -I/usr/include/openal -I/usr/include/mpg123
+LDFLAGS := $(shell pkg-config --libs gtk+-3.0) -lopenal -lmpg123
 
-all: main
+# Source files
+SRC_DIR := src
+SRCS := $(wildcard $(SRC_DIR)/*.cpp) $(wildcard $(SRC_DIR)/gui/*.cpp)
+OBJS := $(patsubst $(SRC_DIR)/%.cpp,%.o,$(SRCS))
 
-main: main.o Settings.o InputHandler.o Utility.o
-	$(CXX) -o main main.o Settings.o InputHandler.o Utility.o $(LDFLAGS)
+# Targets
+TARGET := pttcpp
 
-main.o: src/main.cpp src/Settings.h src/InputHandler.h src/Utility.h
-	$(CXX) $(CXXFLAGS) -c src/main.cpp
+all: $(TARGET)
 
-Settings.o: src/Settings.cpp src/Settings.h src/Utility.h
-	$(CXX) $(CXXFLAGS) -c src/Settings.cpp
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
-InputHandler.o: src/InputHandler.cpp src/InputHandler.h src/Settings.h src/Utility.h
-	$(CXX) $(CXXFLAGS) -c src/InputHandler.cpp
+# Pattern rule for .cpp -> .o
+%.o: $(SRC_DIR)/%.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-Utility.o: src/Utility.cpp src/Utility.h
-	$(CXX) $(CXXFLAGS) -c src/Utility.cpp
+# GUI files need special handling
+gui/%.o: $(SRC_DIR)/gui/%.cpp
+	@mkdir -p gui
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
-	rm -f *.o main
+	rm -f $(OBJS) $(TARGET) gui/*.o
+
+.PHONY: all clean
