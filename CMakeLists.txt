@@ -11,8 +11,7 @@ add_executable(pttcpp
         src/Utility.cpp
         src/Settings.h
         src/Settings.cpp
-        src/InputHandler.cpp
-        src/InputHandler.h
+        src/VirtualInputProxy.cpp
         src/gui/SettingsGUI.cpp
         src/gui/SettingsGUI.h
 )
