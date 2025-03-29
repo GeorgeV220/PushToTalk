@@ -19,6 +19,9 @@ public:
     static std::mutex audioMutex;
 
     // Function declarations
+    static std::string trim(const std::string &str);
+    static std::pair<std::string, std::string> splitKeyValue(const std::string &line);
+    static std::vector<std::string> split(const std::string &s, char delimiter);
     static void print(const std::string& message);
     static void error(const std::string& message);
     static void debugPrint(const std::string& message);

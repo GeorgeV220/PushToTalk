@@ -11,6 +11,7 @@
 #include <AL/alc.h>
 #include <mpg123.h>
 #include <mutex>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -23,6 +24,34 @@ ALCcontext *Utility::alContext = nullptr;
 std::vector<ALuint> Utility::sourcePool;
 std::map<std::string, ALuint> Utility::bufferCache;
 std::mutex Utility::audioMutex;
+
+std::string Utility::trim(const std::string &str) {
+    auto start = str.begin();
+    while (start != str.end() && std::isspace(*start)) start++;
+    auto end = str.end();
+    while (end != start && std::isspace(*(end - 1))) end--;
+    return std::string(start, end);
+}
+
+std::pair<std::string, std::string> Utility::splitKeyValue(const std::string &line) {
+    const size_t eqPos = line.find('=');
+    if (eqPos == std::string::npos) return {"", ""};
+
+    std::string key = trim(line.substr(0, eqPos));
+    std::string value = trim(line.substr(eqPos + 1));
+    return {key, value};
+}
+
+std::vector<std::string> Utility::split(const std::string &s, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
 
 void Utility::print(const std::string &message) {
     std::cout << message << std::endl;

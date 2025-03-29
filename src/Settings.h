@@ -1,15 +1,8 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
+#include <cstdint>
 #include <string>
-
-struct ConversionResult {
-    int value;
-    bool success;
-
-    ConversionResult() : value(-1), success(false) {
-    }
-};
 
 class Settings {
 private:
@@ -20,18 +13,20 @@ public:
     static Settings settings;
     std::string sDevice;
     int sButton;
-    int sButton2;
     std::string sPttOnPath;
     std::string sPttOffPath;
     float sVolume;
 
     Settings();
 
-    static ConversionResult safeAtoi(const std::string &str);
-
     void loadSettings();
 
-    void saveSettings(const std::string &device, int button1, int button2, std::string pttOnPath, std::string pttOffPath, float volume);
+    void saveSettings(const std::string &device, int button, std::string pttOnPath,
+                      std::string pttOffPath, float volume);
+
+    [[nodiscard]] uint16_t getVendorID() const;
+    [[nodiscard]] uint16_t getProductID() const;
+    [[nodiscard]] uint32_t getDeviceUID() const;
 
     static void setPath(const std::string &path);
 };

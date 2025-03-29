@@ -4,13 +4,18 @@
 #include <sys/stat.h>
 #include <linux/input.h>
 #include <cstdlib>
+#include <iostream>
 #include <stdexcept>
 #include <utility>
 #include <pwd.h>
+#include <sstream>
 
-#define DEFAULT_DEVICE "/dev/input/event5"
+#include "utilities/numbers/Conversion.h"
+
+#define DEFAULT_PRODUCT_ID 0x0
+#define DEFAULT_VENDOR_ID 0x0
+#define DEFAULT_UID 0x0
 #define DEFAULT_BUTTON BTN_EXTRA
-#define DEFAULT_BUTTON2 BTN_SIDE
 #define PTT_ON_PATH "/home/<user>/Music/ptt_on.mp3"
 #define PTT_OFF_PATH "/home/<user>/Music/ptt_off.mp3"
 #define DEFAULT_VOLUME 0.1f
@@ -18,9 +23,9 @@
 // static
 Settings Settings::settings;
 
-Settings::Settings() : sDevice(DEFAULT_DEVICE), sButton(DEFAULT_BUTTON),
-                       sButton2(DEFAULT_BUTTON2), sPttOnPath(PTT_ON_PATH),
-                       sPttOffPath(PTT_OFF_PATH), sVolume(DEFAULT_VOLUME) {
+Settings::Settings() : sButton(DEFAULT_BUTTON),
+                       sPttOnPath(PTT_ON_PATH), sPttOffPath(PTT_OFF_PATH),
+                       sVolume(DEFAULT_VOLUME) {
     const char *homeDir = nullptr;
 
     if (const char *sudoUser = getenv("SUDO_USER")) {
@@ -43,39 +48,20 @@ Settings::Settings() : sDevice(DEFAULT_DEVICE), sButton(DEFAULT_BUTTON),
     Utility::print(configFilePath);
 }
 
-
-ConversionResult Settings::safeAtoi(const std::string &str) {
-    ConversionResult result;
-    try {
-        size_t idx;
-        const int value = std::stoi(str, &idx);
-
-        if (idx != str.length()) {
-            throw std::invalid_argument("Trailing characters");
-        }
-
-        result.value = value;
-        result.success = true;
-    } catch ([[maybe_unused]] const std::exception &e) {
-        result.success = false;
-    }
-    return result;
-}
-
 void Settings::saveSettings(
     const std::string &device,
-    int button1,
-    int button2,
+    int button,
     std::string pttOnPath,
     std::string pttOffPath,
     float volume
 ) {
     sDevice = device;
-    sButton = button1;
-    sButton2 = button2;
+    sButton = button;
     sPttOnPath = std::move(pttOnPath);
     sPttOffPath = std::move(pttOffPath);
+    sVolume = volume;
 
+    // Create config directory if needed
     struct stat st{};
     if (stat(configDirPath.c_str(), &st) == -1 && mkdir(configDirPath.c_str(), 0755) == -1) {
         Utility::error("Could not create config directory");
@@ -84,11 +70,11 @@ void Settings::saveSettings(
 
     std::ofstream file(configFilePath);
     if (file.is_open()) {
-        file << "device=" << sDevice << "\n";
-        file << "button1=" << sButton << "\n";
-        file << "button2=" << sButton2 << "\n";
-        file << "pttonpath=" << sPttOnPath << "\n";
-        file << "pttoffpath=" << sPttOffPath << "\n";
+        file << "device = " << device << "\n";
+        file << "button = " << sButton << "\n";
+        file << "pttonpath = " << sPttOnPath << "\n";
+        file << "pttoffpath = " << sPttOffPath << "\n";
+        file << "volume = " << std::fixed << sVolume << "\n";
         Utility::debugPrint("Saving settings");
     } else {
         Utility::error("Could not open settings file for writing");
@@ -104,27 +90,56 @@ void Settings::loadSettings() {
 
     std::string line;
     while (std::getline(file, line)) {
-        Utility::print(line);
-        if (line.find("device=") == 0) {
-            sDevice = line.substr(7);
-        } else if (line.find("button1=") == 0) {
-            ConversionResult result = safeAtoi(line.substr(8));
-            if (result.success) {
+        auto [key, value] = Utility::splitKeyValue(line);
+        if (key.empty()) continue;
+
+        if (key == "device") {
+            sDevice = value;
+        } else if (key == "button") {
+            if (const IntConversionResult result = safeStrToInt(value); result.success) {
                 sButton = result.value;
             } else {
-                Utility::error("Failed to parse button1 value");
+                Utility::error("Failed to parse button value");
             }
-        } else if (line.find("button2=") == 0) {
-            ConversionResult result = safeAtoi(line.substr(8));
-            if (result.success) {
-                sButton2 = result.value;
+        } else if (key == "pttonpath") {
+            sPttOnPath = value;
+        } else if (key == "pttoffpath") {
+            sPttOffPath = value;
+        } else if (key == "volume") {
+            if (const FloatConversionResult result = safeStrToFloat(value); result.success) {
+                sVolume = result.value;
             } else {
-                Utility::error("Failed to parse button2 value");
+                Utility::error("Failed to parse volume value");
             }
-        } else if (line.find("pttonpath=") == 0) {
-            sPttOnPath = line.substr(10);
-        } else if (line.find("pttoffpath=") == 0) {
-            sPttOffPath = line.substr(11);
         }
     }
+}
+
+uint16_t Settings::getVendorID() const {
+    uint16_t vendor = DEFAULT_VENDOR_ID;
+    if (const auto parts = Utility::split(sDevice, ':'); parts.size() == 3) {
+        const std::string &strVendor = parts[0];
+
+        vendor = safeStrToUInt16(strVendor).success ? safeStrToUInt16(strVendor).value : DEFAULT_VENDOR_ID;
+    }
+    return vendor;
+}
+
+uint16_t Settings::getProductID() const {
+    uint16_t product = DEFAULT_PRODUCT_ID;
+    if (const auto parts = Utility::split(sDevice, ':'); parts.size() == 3) {
+        const std::string &strProduct = parts[1];
+        product = safeStrToUInt16(strProduct).success ? safeStrToUInt16(strProduct).value : DEFAULT_PRODUCT_ID;
+    }
+    return product;
+}
+
+uint32_t Settings::getDeviceUID() const {
+    uint32_t uid = DEFAULT_UID;
+    if (const auto parts = Utility::split(sDevice, ':'); parts.size() == 3) {
+        const std::string &strUID = parts[2];
+
+        uid = safeStrToUInt32(strUID).success ? safeStrToUInt32(strUID).value : DEFAULT_UID;
+    }
+    return uid;
 }

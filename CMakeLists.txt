@@ -11,9 +11,14 @@ add_executable(pttcpp
         src/Utility.cpp
         src/Settings.h
         src/Settings.cpp
-        src/VirtualInputProxy.cpp
         src/gui/SettingsGUI.cpp
         src/gui/SettingsGUI.h
+        src/device/DeviceCapabilities.cpp
+        src/device/DeviceCapabilities.h
+        src/device/VirtualInputProxy.cpp
+        src/device/VirtualInputProxy.h
+        src/utilities/numbers/Conversion.cpp
+        src/utilities/numbers/Conversion.h
 )
 
 find_package(PkgConfig REQUIRED)
