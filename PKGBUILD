@@ -26,6 +26,7 @@ package() {
 post_install() {
   echo "Enabling pttcpp systemd user service..."
   systemctl --user enable pttcpp.service
+  echo "Run pttcpp --detect to find your device and then pttcpp --gui to set up your settings, after than start the service or restart the system"
 }
 
 post_remove() {
