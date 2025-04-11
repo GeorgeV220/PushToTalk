@@ -12,8 +12,11 @@
 #include <mpg123.h>
 #include <mutex>
 #include <sstream>
+#include <pulse/pulseaudio.h>
+
 #include <thread>
 #include <vector>
+#include <atomic>
 
 #include "Settings.h"
 
@@ -24,6 +27,12 @@ ALCcontext *Utility::alContext = nullptr;
 std::vector<ALuint> Utility::sourcePool;
 std::map<std::string, ALuint> Utility::bufferCache;
 std::mutex Utility::audioMutex;
+
+struct CallbackData {
+    std::atomic<bool> micMute;
+    pa_mainloop *ml{};
+};
+
 
 std::string Utility::trim(const std::string &str) {
     auto start = str.begin();
@@ -87,6 +96,50 @@ std::string Utility::get_active_user() {
     return "";
 }
 
+static void context_state_cb(pa_context *c, void *userdata) {
+    const auto *data = static_cast<CallbackData *>(userdata);
+    switch (pa_context_get_state(c)) {
+        case PA_CONTEXT_READY: {
+            pa_operation *op = pa_context_get_server_info(
+                c, [](pa_context *c, const pa_server_info *i, void *userdata) {
+                    const auto *data = static_cast<CallbackData *>(userdata);
+                    if (!i) {
+                        pa_mainloop_quit(data->ml, 1);
+                        return;
+                    }
+                    pa_operation *op = pa_context_get_source_info_by_name(
+                        c, i->default_source_name, [](pa_context *c, const pa_source_info *i, int eol, void *userdata) {
+                            auto *data = static_cast<CallbackData *>(userdata);
+                            if (eol < 0) {
+                                Utility::error("Failed to get source info");
+                                pa_mainloop_quit(data->ml, 1);
+                                return;
+                            }
+                            if (eol) return;
+                            pa_operation *set_op = pa_context_set_source_mute_by_index(
+                                c, i->index, data->micMute, [](pa_context *c, int success, void *userdata) {
+                                    const auto *data = static_cast<CallbackData *>(userdata);
+                                    if (!success) {
+                                        Utility::error("Failed to set mute state");
+                                    }
+                                    pa_mainloop_quit(data->ml, 0);
+                                }, userdata);
+                            pa_operation_unref(set_op);
+                        }, userdata);
+                    pa_operation_unref(op);
+                }, userdata);
+            pa_operation_unref(op);
+            break;
+        }
+        case PA_CONTEXT_FAILED:
+        case PA_CONTEXT_TERMINATED:
+            pa_mainloop_quit(data->ml, 1);
+            break;
+        default:
+            break;
+    }
+}
+
 void Utility::setMicMute(const bool micMute) {
     const std::string activeUser = get_active_user();
     if (activeUser.empty()) {
@@ -113,13 +166,25 @@ void Utility::setMicMute(const bool micMute) {
     const std::string runtimeDir = "/run/user/" + std::to_string(userUID);
     setenv("XDG_RUNTIME_DIR", runtimeDir.c_str(), 1);
 
-    const std::string command = micMute
-                                    ? "pactl set-source-mute @DEFAULT_SOURCE@ 1"
-                                    : "pactl set-source-mute @DEFAULT_SOURCE@ 0";
+    CallbackData data;
+    data.micMute = micMute;
+    data.ml = pa_mainloop_new();
+    pa_mainloop_api *api = pa_mainloop_get_api(data.ml);
+    pa_context *ctx = pa_context_new(api, "MicMuteUtility");
 
-    if (system(command.c_str()) == -1) {
-        error("Failed to execute pactl command");
-    }
+    pa_context_set_state_callback(ctx, context_state_cb, &data);
+    pa_context_connect(ctx, nullptr, PA_CONTEXT_NOFLAGS, nullptr);
+
+    int ret = 0;
+    do {
+        if (pa_mainloop_iterate(data.ml, 1, &ret) < 0) {
+            break;
+        }
+    } while (ret == 0);
+
+    pa_context_disconnect(ctx);
+    pa_context_unref(ctx);
+    pa_mainloop_free(data.ml);
 }
 
 void Utility::initAudioSystem() {

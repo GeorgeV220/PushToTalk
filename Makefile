@@ -1,8 +1,8 @@
 # Compiler and flags
 CXX := g++
 CXXFLAGS := -std=c++20 -Wall -Wextra
-INCLUDES := $(shell pkg-config --cflags gtk+-3.0) -I/usr/include/openal -I/usr/include/mpg123
-LDFLAGS := $(shell pkg-config --libs gtk+-3.0) -lopenal -lmpg123
+INCLUDES := $(shell pkg-config --cflags gtk+-3.0 libpulse) -I/usr/include/openal -I/usr/include/mpg123
+LDFLAGS := $(shell pkg-config --libs gtk+-3.0 libpulse) -lopenal -lmpg123
 
 # Source files
 SRC_DIR := src

@@ -23,8 +23,12 @@ add_executable(pttcpp
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
+pkg_check_modules(PULSEAUDIO REQUIRED libpulse)  # Add PulseAudio
 
-include_directories(${GTK3_INCLUDE_DIRS})
+include_directories(
+        ${GTK3_INCLUDE_DIRS}
+        ${PULSEAUDIO_INCLUDE_DIRS}  # Add PulseAudio includes
+)
 link_directories(${GTK3_LIBRARY_DIRS})
 
 add_definitions(${GTK3_CFLAGS_OTHER})
@@ -49,4 +53,5 @@ target_link_libraries(pttcpp
         ${GTK3_LIBRARIES}
         ${OPENAL_LIBRARY}
         ${MPG123_LIBRARIES}
+        ${PULSEAUDIO_LIBRARIES}  # Link PulseAudio
 )
