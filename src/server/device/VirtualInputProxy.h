@@ -1,7 +1,7 @@
 #ifndef VIRTUALINPUTPROXY_H
 #define VIRTUALINPUTPROXY_H
 
-#include "DeviceCapabilities.h"
+#include "../../common/device/DeviceCapabilities.h"
 #include <functional>
 #include <thread>
 #include <atomic>
@@ -19,6 +19,8 @@ public:
     void start();
 
     void stop();
+
+    static void detect_devices();
 
 private:
     int fd_physical_ = -1;

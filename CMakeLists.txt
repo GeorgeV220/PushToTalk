@@ -1,57 +1,72 @@
 cmake_minimum_required(VERSION 3.29)
-project(pttcpp)
+project(PushToTalk)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(pttcpp
-        src/main.cpp
-        src/push_to_talk.cpp
-        src/push_to_talk.h
-        src/Utility.h
-        src/Utility.cpp
-        src/Settings.h
-        src/Settings.cpp
-        src/gui/SettingsGUI.cpp
-        src/gui/SettingsGUI.h
-        src/device/DeviceCapabilities.cpp
-        src/device/DeviceCapabilities.h
-        src/device/VirtualInputProxy.cpp
-        src/device/VirtualInputProxy.h
-        src/utilities/numbers/Conversion.cpp
-        src/utilities/numbers/Conversion.h
-)
-
+# --- Packages ---
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
-pkg_check_modules(PULSEAUDIO REQUIRED libpulse)  # Add PulseAudio
-
-include_directories(
-        ${GTK3_INCLUDE_DIRS}
-        ${PULSEAUDIO_INCLUDE_DIRS}  # Add PulseAudio includes
-)
-link_directories(${GTK3_LIBRARY_DIRS})
-
-add_definitions(${GTK3_CFLAGS_OTHER})
-
+pkg_check_modules(PULSEAUDIO REQUIRED libpulse)
 find_package(OpenAL REQUIRED)
-if (OpenAL_FOUND)
-    include_directories(${OpenAL_INCLUDE_DIR})
-else()
-    message(FATAL_ERROR "OpenAL not found!")
-endif()
+find_package(ZLIB REQUIRED)
 
 find_library(MPG123_LIBRARIES mpg123 REQUIRED)
 find_path(MPG123_INCLUDE_DIR mpg123.h REQUIRED)
 
-if (MPG123_LIBRARIES AND MPG123_INCLUDE_DIR)
-    include_directories(${MPG123_INCLUDE_DIR})
-else()
+if (NOT MPG123_LIBRARIES OR NOT MPG123_INCLUDE_DIR)
     message(FATAL_ERROR "mpg123 not found!")
-endif()
+endif ()
 
-target_link_libraries(pttcpp
+add_definitions(${GTK3_CFLAGS_OTHER})
+
+# --- Common Sources ---
+set(SHARED_SOURCES
+        src/common/utilities/Utility.cpp
+        src/common/utilities/Utility.h
+        src/common/Settings.cpp
+        src/common/Settings.h
+        src/common/utilities/numbers/Conversion.cpp
+        src/common/utilities/numbers/Conversion.h
+        src/common/device/DeviceCapabilities.cpp
+        src/common/device/DeviceCapabilities.h
+)
+
+# --- Client Executable ---
+add_executable(client
+        ${SHARED_SOURCES}
+        src/client/client_main.cpp
+        src/client/gui/SettingsGUI.cpp
+        src/client/gui/SettingsGUI.h
+        src/client/InputClient.cpp
+        src/client/utilities/AudioUtilities.cpp
+        src/client/utilities/AudioUtilities.h
+        src/client/push_to_talk.cpp
+        src/client/push_to_talk.h
+)
+
+target_include_directories(client SYSTEM PRIVATE
+        ${GTK3_INCLUDE_DIRS}
+        ${PULSEAUDIO_INCLUDE_DIRS}
+        ${OpenAL_INCLUDE_DIR}
+        ${MPG123_INCLUDE_DIR}
+)
+
+target_link_libraries(client
         ${GTK3_LIBRARIES}
+        ${PULSEAUDIO_LIBRARIES}
         ${OPENAL_LIBRARY}
         ${MPG123_LIBRARIES}
-        ${PULSEAUDIO_LIBRARIES}  # Link PulseAudio
 )
+
+# --- Server Executable ---
+add_executable(server
+        ${SHARED_SOURCES}
+        src/server/server_main.cpp
+        src/server/device/VirtualInputProxy.cpp
+        src/server/device/VirtualInputProxy.h
+)
+
+# Server may not need all system includes — only add if needed:
+target_include_directories(server SYSTEM PRIVATE)
+
+target_link_libraries(server PRIVATE ZLIB::ZLIB)

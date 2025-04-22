@@ -1,5 +1,5 @@
 #include "Settings.h"
-#include "Utility.h"
+#include "utilities/Utility.h"
 #include <fstream>
 #include <sys/stat.h>
 #include <linux/input.h>
@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <utility>
 #include <pwd.h>
-#include <sstream>
 
 #include "utilities/numbers/Conversion.h"
 

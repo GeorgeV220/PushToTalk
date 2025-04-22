@@ -8,6 +8,13 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 
+struct UserInfo {
+    std::string name;
+    std::string path;
+    uid_t uid;
+    gid_t gid;
+};
+
 class Utility {
 public:
     // Static members
@@ -27,10 +34,7 @@ public:
     static void debugPrint(const std::string& message);
     static void pError(const std::string& message);
     static std::string get_active_user();
-    static void setMicMute(bool micMute);
-    static void initAudioSystem();
-    static void cleanupAudioSystem();
-    static void playSound(const char* fileName);
+    static UserInfo get_active_user_info();
 };
 
 #endif // UTILITY_H

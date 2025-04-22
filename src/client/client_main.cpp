@@ -1,6 +1,6 @@
 #include "push_to_talk.h"
-#include "Settings.h"
-#include "Utility.h"
+#include "../common/Settings.h"
+#include "../common/utilities/Utility.h"
 #include "gui/SettingsGUI.h"
 
 
@@ -11,9 +11,6 @@ int main(const int argc, char *argv[]) {
             Utility::debug = true;
         } else if (arg == "--gui") {
             SettingsGUI::showSettingsGui();
-            return 0;
-        } else if (arg == "--detect") {
-            PushToTalk::detect_devices();
             return 0;
         }
     }

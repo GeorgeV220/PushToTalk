@@ -4,9 +4,9 @@
 #include <iostream>
 #include <linux/input.h>
 
-#include "../Settings.h"
-#include "../Utility.h"
-#include "../utilities/numbers/Conversion.h"
+#include "../../common/Settings.h"
+#include "../../common/utilities//Utility.h"
+#include "../../common/utilities/numbers/Conversion.h"
 
 struct ButtonData {
     GtkEntry **entries;

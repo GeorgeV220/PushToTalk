@@ -1,10 +1,10 @@
 #ifndef PUSH_TO_TALK_H
 #define PUSH_TO_TALK_H
-#include "Settings.h"
-#include "device/VirtualInputProxy.h"
+
+#include "InputClient.cpp"
 
 class PushToTalk {
-    VirtualInputProxy proxy;
+    InputClient client_;
 
 public:
     PushToTalk();
@@ -12,8 +12,6 @@ public:
     ~PushToTalk();
 
     int run();
-
-    static void detect_devices();
 };
 
 #endif

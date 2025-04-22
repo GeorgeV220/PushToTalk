@@ -1,8 +1,6 @@
-#include "Utility.h"
+#include "AudioUtilities.h"
 
-#include <iostream>
 #include <unistd.h>
-#include <cstdlib>
 #include <map>
 #include <string>
 #include <pwd.h>
@@ -18,83 +16,20 @@
 #include <vector>
 #include <atomic>
 
-#include "Settings.h"
+#include "../../common/Settings.h"
+#include "../../common/utilities/Utility.h"
 
-bool Utility::debug = false;
 
-ALCdevice *Utility::alDevice = nullptr;
-ALCcontext *Utility::alContext = nullptr;
-std::vector<ALuint> Utility::sourcePool;
-std::map<std::string, ALuint> Utility::bufferCache;
-std::mutex Utility::audioMutex;
+ALCdevice *AudioUtilities::alDevice = nullptr;
+ALCcontext *AudioUtilities::alContext = nullptr;
+std::vector<ALuint> AudioUtilities::sourcePool;
+std::map<std::string, ALuint> AudioUtilities::bufferCache;
+std::mutex AudioUtilities::audioMutex;
 
 struct CallbackData {
     std::atomic<bool> micMute;
     pa_mainloop *ml{};
 };
-
-
-std::string Utility::trim(const std::string &str) {
-    auto start = str.begin();
-    while (start != str.end() && std::isspace(*start)) start++;
-    auto end = str.end();
-    while (end != start && std::isspace(*(end - 1))) end--;
-    return std::string(start, end);
-}
-
-std::pair<std::string, std::string> Utility::splitKeyValue(const std::string &line) {
-    const size_t eqPos = line.find('=');
-    if (eqPos == std::string::npos) return {"", ""};
-
-    std::string key = trim(line.substr(0, eqPos));
-    std::string value = trim(line.substr(eqPos + 1));
-    return {key, value};
-}
-
-std::vector<std::string> Utility::split(const std::string &s, char delimiter) {
-    std::vector<std::string> tokens;
-    std::string token;
-    std::istringstream tokenStream(s);
-
-    while (std::getline(tokenStream, token, delimiter)) {
-        tokens.push_back(token);
-    }
-    return tokens;
-}
-
-void Utility::print(const std::string &message) {
-    std::cout << message << std::endl;
-}
-
-void Utility::error(const std::string &message) {
-    std::cerr << "Error: " << message << std::endl;
-}
-
-void Utility::debugPrint(const std::string &message) {
-    if (debug) {
-        std::cout << "Debug: " << message << std::endl;
-    }
-}
-
-void Utility::pError(const std::string &message) {
-    if (debug) {
-        ::perror(message.c_str());
-    }
-}
-
-std::string Utility::get_active_user() {
-    if (const char *sudoUser = getenv("SUDO_USER")) {
-        return std::string(sudoUser);
-    }
-
-    // Fallback: Get the current real user ID
-    const uid_t uid = getuid();
-    if (const passwd *pw = getpwuid(uid)) {
-        return std::string(pw->pw_name);
-    }
-
-    return "";
-}
 
 static void context_state_cb(pa_context *c, void *userdata) {
     const auto *data = static_cast<CallbackData *>(userdata);
@@ -140,16 +75,16 @@ static void context_state_cb(pa_context *c, void *userdata) {
     }
 }
 
-void Utility::setMicMute(const bool micMute) {
-    const std::string activeUser = get_active_user();
+void AudioUtilities::setMicMute(const bool micMute) {
+    const std::string activeUser = Utility::get_active_user();
     if (activeUser.empty()) {
-        error("Unable to determine the active user");
+        Utility::error("Unable to determine the active user");
         return;
     }
 
     const passwd *pw = getpwnam(activeUser.c_str());
     if (!pw) {
-        error("Failed to retrieve user details for " + activeUser);
+        Utility::error("Failed to retrieve user details for " + activeUser);
         return;
     }
 
@@ -157,7 +92,7 @@ void Utility::setMicMute(const bool micMute) {
     const char *userHome = pw->pw_dir;
 
     if (setuid(userUID) != 0) {
-        error("Failed to switch to user " + activeUser);
+        Utility::error("Failed to switch to user " + activeUser);
         return;
     }
 
@@ -187,15 +122,15 @@ void Utility::setMicMute(const bool micMute) {
     pa_mainloop_free(data.ml);
 }
 
-void Utility::initAudioSystem() {
+void AudioUtilities::initAudioSystem() {
     if (mpg123_init() != MPG123_OK) {
-        error("Failed to initiate mpg123");
+        Utility::error("Failed to initiate mpg123");
         return;
     }
 
     alDevice = alcOpenDevice(nullptr);
     if (!alDevice) {
-        error("Failed to open audio device");
+        Utility::error("Failed to open audio device");
         return;
     }
 
@@ -209,7 +144,7 @@ void Utility::initAudioSystem() {
     }
 }
 
-void Utility::cleanupAudioSystem() {
+void AudioUtilities::cleanupAudioSystem() {
     std::lock_guard lock(audioMutex);
 
     for (ALuint source: sourcePool) {
@@ -229,7 +164,7 @@ void Utility::cleanupAudioSystem() {
     mpg123_exit();
 }
 
-void Utility::playSound(const char *fileName) {
+void AudioUtilities::playSound(const char *fileName) {
     std::lock_guard lock(audioMutex);
 
     ALuint bufferId;
@@ -238,7 +173,7 @@ void Utility::playSound(const char *fileName) {
     } else {
         mpg123_handle *mh = mpg123_new(nullptr, nullptr);
         if (!mh || mpg123_open(mh, fileName) != MPG123_OK) {
-            error("Failed to open sound file");
+            Utility::error("Failed to open sound file");
             if (mh) mpg123_delete(mh);
             return;
         }
@@ -246,7 +181,7 @@ void Utility::playSound(const char *fileName) {
         long rate;
         int channels, encoding;
         if (mpg123_getformat(mh, &rate, &channels, &encoding) != MPG123_OK) {
-            error("Failed to get audio format");
+            Utility::error("Failed to get audio format");
             mpg123_close(mh);
             mpg123_delete(mh);
             return;
@@ -270,7 +205,7 @@ void Utility::playSound(const char *fileName) {
     }
 
     if (sourcePool.empty()) {
-        debugPrint("No available audio sources - skipping playback");
+        Utility::debugPrint("No available audio sources - skipping playback");
         return;
     }
 
