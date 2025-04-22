@@ -1,0 +1,11 @@
+[Unit]
+Description=PushToTalk Client
+After=pipewire.service
+Requires=pipewire.service
+
+[Service]
+ExecStart=/usr/bin/ptt-client
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

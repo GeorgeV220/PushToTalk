@@ -1,35 +1,30 @@
-### PKGBUILD
-pkgname=pttcpp
-gitrepo="https://github.com/GeorgeV220/PushToTalk.git"
+# Maintainer: GeorgeV22 <email: contact at georgev22 dot com>
+pkgname=pushtotalk
 pkgver=1.0
 pkgrel=1
+pkgdesc="Push-to-Talk voice communication tool"
 arch=('x86_64')
-license=('GPL')
-depends=('gtk3' 'openal' 'mpg123' 'cmake' 'gcc' 'pkgconf')
-makedepends=('git')
-source=("git+$gitrepo")
-md5sums=('SKIP')
+url="https://example.com"
+license=('MIT')
+depends=('gtk3' 'libpulse' 'openal' 'zlib' 'mpg123')
+makedepends=('cmake')
+install=pushtotalk.install
+source=(
+  "$pkgname::git+https://github.com/GeorgeV220/PushToTalk.git"
+  "ptt-server.service.in"
+  "ptt-client.service"
+)
+md5sums=('SKIP' 'SKIP' 'SKIP')
 
 build() {
-  cd "$srcdir/PushToTalk"
-  mkdir -p build
-  cd build
-  cmake .. -DCMAKE_BUILD_TYPE=Release
-  make
+  cmake -S "$srcdir/$pkgname" -B "$srcdir/$pkgname/build" -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$srcdir/$pkgname/build"
 }
 
 package() {
-  install -Dm755 "$srcdir/PushToTalk/build/pttcpp" "$pkgdir/usr/bin/pttcpp"
-  install -Dm644 "$srcdir/PushToTalk/pttcpp.service" "$pkgdir/usr/lib/systemd/user/pttcpp.service"
-}
+  install -Dm755 "$srcdir/$pkgname/build/ptt-client" "$pkgdir/usr/bin/ptt-client"
+  install -Dm755 "$srcdir/$pkgname/build/ptt-server" "$pkgdir/usr/bin/ptt-server"
 
-post_install() {
-  echo "Enabling pttcpp systemd user service..."
-  systemctl --user enable pttcpp.service
-  echo "Run pttcpp --detect to find your device and then pttcpp --gui to set up your settings, after than start the service or restart the system"
-}
-
-post_remove() {
-  echo "Disabling pttcpp systemd user service..."
-  systemctl --user disable pttcpp.service
+  install -Dm644 "$srcdir/ptt-server.service.in" "$pkgdir/usr/lib/systemd/system/ptt-server.service"
+  install -Dm644 "$srcdir/ptt-client.service" "$pkgdir/usr/lib/systemd/user/ptt-client.service"
 }

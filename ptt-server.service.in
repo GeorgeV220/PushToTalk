@@ -1,0 +1,13 @@
+[Unit]
+Description=PushToTalk Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ptt-server
+Environment=SUDO_USER=__USERNAME__
+User=root
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
