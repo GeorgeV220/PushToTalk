@@ -32,7 +32,7 @@ set(SHARED_SOURCES
 )
 
 # --- Client Executable ---
-add_executable(client
+add_executable(ptt-client
         ${SHARED_SOURCES}
         src/client/client_main.cpp
         src/client/gui/SettingsGUI.cpp
@@ -44,14 +44,14 @@ add_executable(client
         src/client/push_to_talk.h
 )
 
-target_include_directories(client SYSTEM PRIVATE
+target_include_directories(ptt-client SYSTEM PRIVATE
         ${GTK3_INCLUDE_DIRS}
         ${PULSEAUDIO_INCLUDE_DIRS}
         ${OpenAL_INCLUDE_DIR}
         ${MPG123_INCLUDE_DIR}
 )
 
-target_link_libraries(client
+target_link_libraries(ptt-client
         ${GTK3_LIBRARIES}
         ${PULSEAUDIO_LIBRARIES}
         ${OPENAL_LIBRARY}
@@ -59,14 +59,13 @@ target_link_libraries(client
 )
 
 # --- Server Executable ---
-add_executable(server
+add_executable(ptt-server
         ${SHARED_SOURCES}
         src/server/server_main.cpp
         src/server/device/VirtualInputProxy.cpp
         src/server/device/VirtualInputProxy.h
 )
 
-# Server may not need all system includes — only add if needed:
-target_include_directories(server SYSTEM PRIVATE)
+target_include_directories(ptt-server SYSTEM PRIVATE)
 
-target_link_libraries(server PRIVATE ZLIB::ZLIB)
+target_link_libraries(ptt-server PRIVATE ZLIB::ZLIB)
