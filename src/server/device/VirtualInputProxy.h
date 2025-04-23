@@ -1,7 +1,6 @@
 #ifndef VIRTUALINPUTPROXY_H
 #define VIRTUALINPUTPROXY_H
 
-#include "../../common/device/DeviceCapabilities.h"
 #include <functional>
 #include <thread>
 #include <atomic>

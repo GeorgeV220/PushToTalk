@@ -2,6 +2,7 @@
 #define SETTINGS_H
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 
 class Settings {
@@ -29,6 +30,8 @@ public:
     [[nodiscard]] uint32_t getDeviceUID() const;
 
     static void setPath(const std::string &path);
+private:
+    std::mutex settingsMutex;
 };
 
 #endif // SETTINGS_H

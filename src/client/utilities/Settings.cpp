@@ -1,15 +1,14 @@
 #include "Settings.h"
-#include "utilities/Utility.h"
+#include "../../common/utilities/Utility.h"
 #include <fstream>
 #include <sys/stat.h>
 #include <linux/input.h>
 #include <cstdlib>
 #include <iostream>
-#include <stdexcept>
 #include <utility>
 #include <pwd.h>
 
-#include "utilities/numbers/Conversion.h"
+#include "../../common/utilities/numbers/Conversion.h"
 
 #define DEFAULT_PRODUCT_ID 0x0
 #define DEFAULT_VENDOR_ID 0x0
@@ -54,6 +53,7 @@ void Settings::saveSettings(
     std::string pttOffPath,
     float volume
 ) {
+    std::lock_guard lock(settingsMutex);
     sDevice = device;
     sButton = button;
     sPttOnPath = std::move(pttOnPath);

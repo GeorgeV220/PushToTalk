@@ -16,7 +16,7 @@
 #include <vector>
 #include <atomic>
 
-#include "../../common/Settings.h"
+#include "Settings.h"
 #include "../../common/utilities/Utility.h"
 
 

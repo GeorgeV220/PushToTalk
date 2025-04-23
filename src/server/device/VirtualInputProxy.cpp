@@ -8,6 +8,7 @@
 #include <utility>
 #include <cstring>
 #include <iomanip>
+#include <iostream>
 #include <sstream>
 
 #include "../../common/utilities/Utility.h"
@@ -74,6 +75,7 @@ void VirtualInputProxy::stop() {
 
 std::string VirtualInputProxy::find_device_path(const uint16_t vendor_id, const uint16_t product_id,
                                                 const uint32_t expected_uid) {
+    std::cout << std::hex << vendor_id << ":" << std::hex << product_id << ":" << std::hex << expected_uid << std::endl;
     DIR *dir = opendir("/sys/class/input/");
     if (!dir) throw std::runtime_error("Can't access input devices");
 

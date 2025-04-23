@@ -3,10 +3,6 @@
 
 #include <string>
 #include <vector>
-#include <map>
-#include <mutex>
-#include <AL/al.h>
-#include <AL/alc.h>
 
 struct UserInfo {
     std::string name;
@@ -19,11 +15,6 @@ class Utility {
 public:
     // Static members
     static bool debug;
-    static ALCdevice* alDevice;
-    static ALCcontext* alContext;
-    static std::vector<ALuint> sourcePool;
-    static std::map<std::string, ALuint> bufferCache;
-    static std::mutex audioMutex;
 
     // Function declarations
     static std::string trim(const std::string &str);

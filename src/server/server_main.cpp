@@ -5,8 +5,8 @@
 #include <cstring>
 #include <stdexcept>
 #include <iostream>
+#include <sstream>
 
-#include "../common/Settings.h"
 #include "../common/utilities/Utility.h"
 #include "device/VirtualInputProxy.h"
 
@@ -90,6 +90,22 @@ private:
                 throw std::runtime_error("Invalid init parameters");
             }
 
+            Utility::debugPrint("Received Data:");
+            std::ostringstream vendor_oss;
+            vendor_oss << std::hex << params.vendor_id;
+            Utility::debugPrint("vendor_id: " + vendor_oss.str());
+
+            std::ostringstream product_oss;
+            product_oss << std::hex << params.product_id;
+            Utility::debugPrint("product_id: " + product_oss.str());
+
+            std::ostringstream uid_oss;
+            uid_oss << std::hex << params.uid;
+            Utility::debugPrint("uid: " + uid_oss.str());
+
+            Utility::debugPrint("target_key: " + std::to_string(params.target_key));
+
+            // Use params as usual after conversion
             VirtualInputProxy vip(
                 params.vendor_id,
                 params.product_id,
@@ -116,7 +132,6 @@ private:
 };
 
 int main(const int argc, char *argv[]) {
-    Settings::settings.loadSettings();
     for (int i = 1; i < argc; ++i) {
         if (std::string arg = argv[i]; arg == "--debug") {
             Utility::debug = true;
