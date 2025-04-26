@@ -1,7 +1,8 @@
 #include "Utility.h"
-
-#include <iostream>
+#include <cstdio>
+#include <cstring>
 #include <unistd.h>
+#include <iostream>
 #include <string>
 #include <pwd.h>
 
@@ -10,8 +11,14 @@
 
 #include <vector>
 
-bool Utility::debug = false;
 
+void Utility::set_debug(bool enabled) {
+    debug_enabled_ = enabled;
+}
+
+bool Utility::is_debug_enabled() {
+    return debug_enabled_;
+}
 
 std::string Utility::trim(const std::string &str) {
     auto start = str.begin();
@@ -50,13 +57,13 @@ void Utility::error(const std::string &message) {
 }
 
 void Utility::debugPrint(const std::string &message) {
-    if (debug) {
+    if (is_debug_enabled()) {
         std::cout << "Debug: " << message << std::endl;
     }
 }
 
 void Utility::pError(const std::string &message) {
-    if (debug) {
+    if (is_debug_enabled()) {
         ::perror(message.c_str());
     }
 }
@@ -74,6 +81,7 @@ std::string Utility::get_active_user() {
     return "";
 }
 
+// TODO switch to nss
 UserInfo Utility::get_active_user_info() {
     const char *sudoUser = getenv("SUDO_USER");
     const uid_t uid = getuid();
@@ -89,4 +97,44 @@ UserInfo Utility::get_active_user_info() {
     }
 
     throw std::runtime_error("Failed to determine user info");
+}
+
+/**
+ *  Safely reads from fd and stores it in buffer.
+ *  Returns size on success.
+ *  Returns -1 on error and sets errno.
+ *  Returns -2 on mid-read EOF.
+ */
+ssize_t Utility::safe_read(const int fd, void *buffer, const size_t size) {
+    const auto ptr = static_cast<char*>(buffer);
+    ssize_t been_read = 0;
+    while (size > been_read) {
+        const ssize_t curr = read(fd, ptr + been_read, size - been_read);
+        if (curr == -1) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        if (curr == 0) break;
+        been_read += curr;
+    }
+    return been_read;
+}
+
+/**
+ *  Safely writes to fd from buffer.
+ *  Returns size on success.
+ *  Returns -1 on error and sets errno.
+ */
+ssize_t Utility::safe_write(const int fd, const void *buffer, const size_t size) {
+    const auto ptr = static_cast<const char*>(buffer);
+    ssize_t been_send = 0;
+    while (size > been_send) { /* While not at buffer end */
+        const ssize_t curr = write(fd, ptr + been_send, size - been_send);
+        if (curr == -1) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        been_send += curr;
+    }
+    return been_send;
 }
