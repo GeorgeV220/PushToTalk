@@ -57,6 +57,7 @@ void InputClient::start() {
 
     if (::connect(sock_fd_, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0) {
         const int err = errno;
+        shutdown(sock_fd_, SHUT_RDWR);
         close(sock_fd_);
         throw std::runtime_error(
             "Connection failed: " +
@@ -89,7 +90,8 @@ void InputClient::start() {
     Utility::debugPrint(uid_oss.str());
     Utility::debugPrint("target key: " + std::to_string(target_key_));
 
-    if (write(sock_fd_, &params, sizeof(params)) != sizeof(params)) {
+    if (Utility::safe_write(sock_fd_, &params, sizeof(params)) != sizeof(params)) {
+        shutdown(sock_fd_, SHUT_RDWR);
         close(sock_fd_);
         throw std::runtime_error("Parameter send failed");
     }
@@ -98,12 +100,13 @@ void InputClient::start() {
     listener_thread_ = std::thread([this]() {
         bool state;
         while (running_) {
-            if (read(sock_fd_, &state, sizeof(state)) == sizeof(state)) {
+            if (Utility::safe_read(sock_fd_, &state, sizeof(state)) == sizeof(state)) {
                 callback_(state);
             } else {
                 running_ = false;
             }
         }
+        shutdown(sock_fd_, SHUT_RDWR);
         close(sock_fd_);
         sock_fd_ = -1;
     });
@@ -111,13 +114,16 @@ void InputClient::start() {
 
 void InputClient::stop() {
     running_ = false;
-    if (listener_thread_.joinable()) {
-        listener_thread_.join();
-    }
     if (sock_fd_ >= 0) {
+        shutdown(sock_fd_, SHUT_RDWR);
         close(sock_fd_);
         sock_fd_ = -1;
     }
+    Utility::print("Stopping client");
+    if (listener_thread_.joinable()) {
+        listener_thread_.join();
+    }
+    Utility::print("Client stopped");
 }
 
 void InputClient::restart() {

@@ -57,7 +57,7 @@ void VirtualInputProxy::start() {
     listener_thread_ = std::thread([this]() {
         input_event ev{};
         while (running_) {
-            if (const ssize_t bytes = read(fd_physical_, &ev, sizeof(ev)); bytes == sizeof(ev)) {
+            if (const ssize_t bytes = Utility::safe_read(fd_physical_, &ev, sizeof(ev)); bytes == sizeof(ev)) {
                 handle_event(ev);
             } else if (bytes < 0) {
                 if (errno != EAGAIN && errno != EINTR) break;
@@ -126,7 +126,7 @@ void VirtualInputProxy::create_virtual_device() {
     strncpy(uidev.name, "PTT Virtual Device", UINPUT_MAX_NAME_SIZE);
     uidev.id.bustype = BUS_VIRTUAL;
 
-    if (write(ufd_, &uidev, sizeof(uidev)) != sizeof(uidev)) {
+    if (Utility::safe_write(ufd_, &uidev, sizeof(uidev)) != sizeof(uidev)) {
         close(ufd_);
         throw std::runtime_error("Failed to write uinput config");
     }
@@ -197,7 +197,7 @@ void VirtualInputProxy::handle_event(const input_event &ev) const {
     if (ev.type == EV_KEY && ev.code == target_key_) {
         if (callback_) callback_(ev.value);
     } else {
-        write(ufd_, &ev, sizeof(ev));
+        Utility::safe_write(ufd_, &ev, sizeof(ev));
     }
 }
 
@@ -245,7 +245,7 @@ void VirtualInputProxy::detect_devices() {
         for (size_t i = 0; i < fds.size(); i++) {
             if (FD_ISSET(fds[i], &set)) {
                 input_event ev{};
-                while (read(fds[i], &ev, sizeof(ev)) == sizeof(ev)) {
+                while (Utility::safe_read(fds[i], &ev, sizeof(ev)) == sizeof(ev)) {
                     if (ev.type == EV_KEY && ev.value == 1) {
                         DeviceCapabilities caps = get_device_capabilities(fds[i]);
                         uint16_t vendor = 0, product = 0;

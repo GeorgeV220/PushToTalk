@@ -34,6 +34,7 @@ private:
 
         unlink(SOCKET_PATH);
         if (bind(sock_fd_, reinterpret_cast<sockaddr *>(&addr), sizeof(addr))) {
+            shutdown(sock_fd_, SHUT_RDWR);
             close(sock_fd_);
             throw std::runtime_error("Bind failed");
         }
@@ -46,6 +47,7 @@ private:
         Utility::print("Socket ownership changed to " + std::to_string(user.uid) + ":" + std::to_string(user.gid));
 
         if (listen(sock_fd_, 5)) {
+            shutdown(sock_fd_, SHUT_RDWR);
             close(sock_fd_);
             throw std::runtime_error("Listen failed");
         }
@@ -86,7 +88,7 @@ private:
                 int target_key;
             } params{};
 
-            if (read(client_fd, &params, sizeof(params)) != sizeof(params)) {
+            if (Utility::safe_read(client_fd, &params, sizeof(params)) != sizeof(params)) {
                 throw std::runtime_error("Invalid init parameters");
             }
 
@@ -114,7 +116,7 @@ private:
             );
 
             vip.set_callback([client_fd](bool state) {
-                if (write(client_fd, &state, sizeof(state)) != sizeof(state)) {
+                if (Utility::safe_write(client_fd, &state, sizeof(state)) != sizeof(state)) {
                     // Handle client disconnect
                     throw std::runtime_error("Client write failed");
                 }
@@ -122,6 +124,7 @@ private:
 
             vip.start();
 
+            // TODO use poll and wait for shutdown on socket
             char buf;
             while (read(client_fd, &buf, 1) > 0) {
             }
@@ -134,7 +137,7 @@ private:
 int main(const int argc, char *argv[]) {
     for (int i = 1; i < argc; ++i) {
         if (std::string arg = argv[i]; arg == "--debug") {
-            Utility::debug = true;
+            Utility::set_debug(true);
         } else if (arg == "--detect") {
             VirtualInputProxy::detect_devices();
         }
