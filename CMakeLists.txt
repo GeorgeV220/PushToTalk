@@ -42,8 +42,6 @@ add_executable(ptt-client
         src/client/utilities/Settings.h
         src/client/PushToTalkApp.cpp
         src/client/PushToTalkApp.h
-        src/server/cli/CommandLine.cpp
-        src/server/cli/CommandLine.h
 )
 
 target_include_directories(ptt-client
@@ -73,6 +71,8 @@ add_executable(ptt-server
         src/server/device/VirtualInputProxy.h
         src/server/InputProxyServer.cpp
         src/server/InputProxyServer.h
+        src/server/cli/CommandLine.cpp
+        src/server/cli/CommandLine.h
 )
 
 target_include_directories(ptt-server
