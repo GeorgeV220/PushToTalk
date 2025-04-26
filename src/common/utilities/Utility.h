@@ -32,8 +32,6 @@ public:
 
     static void pError(const std::string &message);
 
-    static std::string get_active_user();
-
     static UserInfo get_active_user_info();
 
     static ssize_t safe_read(int fd, void *buffer, size_t size);

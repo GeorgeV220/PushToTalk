@@ -76,29 +76,16 @@ static void context_state_cb(pa_context *c, void *userdata) {
 }
 
 void AudioUtilities::setMicMute(const bool micMute) {
-    const std::string activeUser = Utility::get_active_user();
-    if (activeUser.empty()) {
-        Utility::error("Unable to determine the active user");
+    const UserInfo activeUser = Utility::get_active_user_info();
+
+    if (setuid(activeUser.uid) != 0) {
+        Utility::error("Failed to switch to user " + activeUser.name);
         return;
     }
 
-    const passwd *pw = getpwnam(activeUser.c_str());
-    if (!pw) {
-        Utility::error("Failed to retrieve user details for " + activeUser);
-        return;
-    }
+    setenv("HOME", activeUser.path.c_str(), 1);
 
-    const uid_t userUID = pw->pw_uid;
-    const char *userHome = pw->pw_dir;
-
-    if (setuid(userUID) != 0) {
-        Utility::error("Failed to switch to user " + activeUser);
-        return;
-    }
-
-    setenv("HOME", userHome, 1);
-
-    const std::string runtimeDir = "/run/user/" + std::to_string(userUID);
+    const std::string runtimeDir = "/run/user/" + std::to_string(activeUser.uid);
     setenv("XDG_RUNTIME_DIR", runtimeDir.c_str(), 1);
 
     CallbackData data;

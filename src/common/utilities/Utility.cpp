@@ -12,7 +12,7 @@
 #include <vector>
 
 
-void Utility::set_debug(bool enabled) {
+void Utility::set_debug(const bool enabled) {
     debug_enabled_ = enabled;
 }
 
@@ -22,10 +22,10 @@ bool Utility::is_debug_enabled() {
 
 std::string Utility::trim(const std::string &str) {
     auto start = str.begin();
-    while (start != str.end() && std::isspace(*start)) start++;
+    while (start != str.end() && std::isspace(*start)) ++start;
     auto end = str.end();
-    while (end != start && std::isspace(*(end - 1))) end--;
-    return std::string(start, end);
+    while (end != start && std::isspace(*(end - 1))) --end;
+    return {start, end};
 }
 
 std::pair<std::string, std::string> Utility::splitKeyValue(const std::string &line) {
@@ -37,7 +37,7 @@ std::pair<std::string, std::string> Utility::splitKeyValue(const std::string &li
     return {key, value};
 }
 
-std::vector<std::string> Utility::split(const std::string &s, char delimiter) {
+std::vector<std::string> Utility::split(const std::string &s, const char delimiter) {
     std::vector<std::string> tokens;
     std::string token;
     std::istringstream tokenStream(s);
@@ -68,19 +68,6 @@ void Utility::pError(const std::string &message) {
     }
 }
 
-std::string Utility::get_active_user() {
-    if (const char *sudoUser = getenv("SUDO_USER")) {
-        return std::string(sudoUser);
-    }
-
-    const uid_t uid = getuid();
-    if (const passwd *pw = getpwuid(uid)) {
-        return std::string(pw->pw_name);
-    }
-
-    return "";
-}
-
 // TODO switch to nss
 UserInfo Utility::get_active_user_info() {
     const char *sudoUser = getenv("SUDO_USER");
@@ -106,7 +93,7 @@ UserInfo Utility::get_active_user_info() {
  *  Returns -2 on mid-read EOF.
  */
 ssize_t Utility::safe_read(const int fd, void *buffer, const size_t size) {
-    const auto ptr = static_cast<char*>(buffer);
+    const auto ptr = static_cast<char *>(buffer);
     ssize_t been_read = 0;
     while (size > been_read) {
         const ssize_t curr = read(fd, ptr + been_read, size - been_read);
@@ -126,9 +113,10 @@ ssize_t Utility::safe_read(const int fd, void *buffer, const size_t size) {
  *  Returns -1 on error and sets errno.
  */
 ssize_t Utility::safe_write(const int fd, const void *buffer, const size_t size) {
-    const auto ptr = static_cast<const char*>(buffer);
+    const auto ptr = static_cast<const char *>(buffer);
     ssize_t been_send = 0;
-    while (size > been_send) { /* While not at buffer end */
+    while (size > been_send) {
+        /* While not at buffer end */
         const ssize_t curr = write(fd, ptr + been_send, size - been_send);
         if (curr == -1) {
             if (errno == EINTR) continue;
