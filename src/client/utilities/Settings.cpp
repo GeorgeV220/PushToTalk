@@ -1,5 +1,7 @@
 #include "Settings.h"
-#include "../../common/utilities/Utility.h"
+#include "common/utilities/Utility.h"
+#include "common/utilities/numbers/Conversion.h"
+
 #include <fstream>
 #include <sys/stat.h>
 #include <linux/input.h>
@@ -7,8 +9,6 @@
 #include <iostream>
 #include <utility>
 #include <pwd.h>
-
-#include "../../common/utilities/numbers/Conversion.h"
 
 #define DEFAULT_PRODUCT_ID 0x0
 #define DEFAULT_VENDOR_ID 0x0

@@ -11,8 +11,8 @@
 #include <iostream>
 #include <sstream>
 
-#include "../../common/utilities/Utility.h"
-#include "../../common/device/DeviceCapabilities.h"
+#include "common/utilities/Utility.h"
+#include "common/device/DeviceCapabilities.h"
 
 using namespace DeviceUtils;
 

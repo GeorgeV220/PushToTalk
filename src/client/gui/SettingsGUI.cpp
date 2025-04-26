@@ -5,10 +5,10 @@
 #include <mutex>
 
 #include "SettingsGUI.h"
-#include "../PushToTalkApp.h"
-#include "../utilities/Settings.h"
-#include "../../common/utilities/Utility.h"
-#include "../../common/utilities/numbers/Conversion.h"
+#include "client/PushToTalkApp.h"
+#include "client/utilities/Settings.h"
+#include "common/utilities/Utility.h"
+#include "common/utilities/numbers/Conversion.h"
 
 std::mutex gtk_mutex;
 GtkWidget *SettingsGUI::settingsWindow = nullptr;

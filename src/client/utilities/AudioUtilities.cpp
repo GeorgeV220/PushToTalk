@@ -17,7 +17,7 @@
 #include <atomic>
 
 #include "Settings.h"
-#include "../../common/utilities/Utility.h"
+#include "common/utilities/Utility.h"
 
 
 ALCdevice *AudioUtilities::alDevice = nullptr;

@@ -18,12 +18,7 @@ if (NOT MPG123_LIBRARIES OR NOT MPG123_INCLUDE_DIR)
     message(FATAL_ERROR "mpg123 not found!")
 endif ()
 
-add_definitions(
-        ${GTK3_CFLAGS_OTHER}
-        ${APPINDICATOR_CFLAGS_OTHER}
-)
-
-# --- Common Sources ---
+# --- Shared Sources ---
 set(SHARED_SOURCES
         src/common/utilities/Utility.cpp
         src/common/utilities/Utility.h
@@ -40,16 +35,20 @@ add_executable(ptt-client
         src/client/gui/SettingsGUI.cpp
         src/client/gui/SettingsGUI.h
         src/client/InputClient.cpp
+        src/client/InputClient.h
         src/client/utilities/AudioUtilities.cpp
         src/client/utilities/AudioUtilities.h
         src/client/utilities/Settings.cpp
         src/client/utilities/Settings.h
         src/client/PushToTalkApp.cpp
         src/client/PushToTalkApp.h
-        src/client/InputClient.h
+        src/server/cli/CommandLine.cpp
+        src/server/cli/CommandLine.h
 )
 
-target_include_directories(ptt-client SYSTEM PRIVATE
+target_include_directories(ptt-client
+        PRIVATE
+        src
         ${GTK3_INCLUDE_DIRS}
         ${APPINDICATOR_INCLUDE_DIRS}
         ${PULSEAUDIO_INCLUDE_DIRS}
@@ -58,6 +57,7 @@ target_include_directories(ptt-client SYSTEM PRIVATE
 )
 
 target_link_libraries(ptt-client
+        PRIVATE
         ${GTK3_LIBRARIES}
         ${APPINDICATOR_LIBRARIES}
         ${PULSEAUDIO_LIBRARIES}
@@ -71,8 +71,16 @@ add_executable(ptt-server
         src/server/server_main.cpp
         src/server/device/VirtualInputProxy.cpp
         src/server/device/VirtualInputProxy.h
+        src/server/InputProxyServer.cpp
+        src/server/InputProxyServer.h
 )
 
-target_include_directories(ptt-server SYSTEM PRIVATE)
+target_include_directories(ptt-server
+        PRIVATE
+        src
+)
 
-target_link_libraries(ptt-server PRIVATE ZLIB::ZLIB)
+target_link_libraries(ptt-server
+        PRIVATE
+        ZLIB::ZLIB
+)

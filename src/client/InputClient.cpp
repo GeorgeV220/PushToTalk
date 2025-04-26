@@ -9,7 +9,7 @@
 #include <iostream>
 #include <sstream>
 
-#include "../common/utilities/Utility.h"
+#include "common/utilities/Utility.h"
 
 #define SOCKET_PATH "/tmp/input_proxy.sock"
 

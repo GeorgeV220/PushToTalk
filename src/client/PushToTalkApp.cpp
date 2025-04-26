@@ -1,18 +1,18 @@
 #include "PushToTalkApp.h"
-#include "../common/utilities/Utility.h"
+#include "common/utilities/Utility.h"
+#include "common/utilities/numbers/Conversion.h"
 #include "gui/SettingsGUI.h"
 #include "utilities/Settings.h"
-#include <gtk/gtk.h>
-#include <libappindicator/app-indicator.h>
-
-#include "../common/utilities/numbers/Conversion.h"
 #include "utilities/AudioUtilities.h"
+
+#include <libappindicator/app-indicator.h>
+#include <gtk/gtk.h>
 
 PushToTalkApp::PushToTalkApp(const int argc, char *argv[]) {
     Settings::settings.loadSettings();
     for (int i = 1; i < argc; ++i) {
         if (std::string arg = argv[i]; arg == "--debug") {
-            Utility::debug = true;
+            Utility::set_debug(true);
         } else if (arg == "--gui") {
             showGui = true;
         }
