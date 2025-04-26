@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <iostream>
 #include <sstream>
+#include <sys/select.h>
+#include <sys/stat.h>
 
 #include "common/utilities/Utility.h"
 #include "device/VirtualInputProxy.h"
@@ -23,7 +25,7 @@ void InputProxyServer::setup_socket() {
     sockaddr_un addr = {};
 
     if ((sock_fd_ = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-        throw std::runtime_error("Socket creation failed");
+        throw std::runtime_error("Socket creation failed: " + std::string(strerror(errno)));
     }
 
     addr.sun_family = AF_UNIX;
@@ -33,7 +35,7 @@ void InputProxyServer::setup_socket() {
     if (bind(sock_fd_, reinterpret_cast<sockaddr *>(&addr), sizeof(addr))) {
         shutdown(sock_fd_, SHUT_RDWR);
         close(sock_fd_);
-        throw std::runtime_error("Bind failed");
+        throw std::runtime_error("Bind failed: " + std::string(strerror(errno)));
     }
 
     const UserInfo user = Utility::get_active_user_info();
@@ -43,10 +45,14 @@ void InputProxyServer::setup_socket() {
     }
     Utility::print("Socket ownership changed to " + std::to_string(user.uid) + ":" + std::to_string(user.gid));
 
+    if (chmod(SOCKET_PATH, 0660) < 0) {
+        throw std::runtime_error("chmod failed: " + std::string(strerror(errno)));
+    }
+
     if (listen(sock_fd_, 5)) {
         shutdown(sock_fd_, SHUT_RDWR);
         close(sock_fd_);
-        throw std::runtime_error("Listen failed");
+        throw std::runtime_error("Listen failed: " + std::string(strerror(errno)));
     }
 }
 
@@ -55,13 +61,26 @@ void InputProxyServer::setup_socket() {
         sockaddr_un client_addr{};
         socklen_t client_len = sizeof(client_addr);
 
-        const int client_fd = accept(sock_fd_,
-                                     reinterpret_cast<struct sockaddr *>(&client_addr),
-                                     &client_len);
-        if (client_fd < 0) continue;
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(sock_fd_, &read_fds);
 
-        handle_client(client_fd);
-        close(client_fd);
+        if (const int result = select(sock_fd_ + 1, &read_fds, nullptr, nullptr, nullptr); result < 0) {
+            std::cerr << "select() failed: " << strerror(errno) << std::endl;
+            continue;
+        }
+
+        if (FD_ISSET(sock_fd_, &read_fds)) {
+            const int client_fd = accept(sock_fd_,
+                                         reinterpret_cast<struct sockaddr *>(&client_addr),
+                                         &client_len);
+            if (client_fd < 0) {
+                continue;
+            }
+
+            handle_client(client_fd);
+            close(client_fd);
+        }
     }
 }
 
@@ -71,7 +90,7 @@ void InputProxyServer::handle_client(int client_fd) {
         socklen_t len = sizeof(cred);
 
         if (getsockopt(client_fd, SOL_SOCKET, SO_PEERCRED, &cred, &len)) {
-            throw std::runtime_error("Failed to get client credentials");
+            throw std::runtime_error("Failed to get client credentials: " + std::string(strerror(errno)));
         }
 
         if (cred.uid != Utility::get_active_user_info().uid) {
@@ -119,11 +138,33 @@ void InputProxyServer::handle_client(int client_fd) {
 
         vip.start();
 
-        // TODO: Use poll/select to detect shutdown
+        fd_set read_fds;
         char buf;
-        while (read(client_fd, &buf, 1) > 0) {
+        while (true) {
+            FD_ZERO(&read_fds);
+            FD_SET(client_fd, &read_fds);
+
+            if (int ret = select(client_fd + 1, &read_fds, nullptr, nullptr, nullptr); ret < 0) {
+                std::cerr << "select() failed: " << strerror(errno) << std::endl;
+                break;
+            }
+
+            if (FD_ISSET(client_fd, &read_fds)) {
+                ssize_t n = Utility::safe_read(client_fd, &buf, sizeof(buf));
+                if (n == 0) {
+                    break;
+                }
+                if (n < 0) {
+                    std::cerr << "Error reading from client: " << strerror(errno) << std::endl;
+                    break;
+                }
+            }
         }
+
+        shutdown(client_fd, SHUT_RDWR);
     } catch (const std::exception &e) {
         std::cerr << "Client handling error: " << e.what() << std::endl;
     }
+
+    close(client_fd);
 }
