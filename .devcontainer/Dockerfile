@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM mcr.microsoft.com/devcontainers/base:ubuntu
 
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
