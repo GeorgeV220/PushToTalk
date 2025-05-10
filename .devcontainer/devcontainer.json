@@ -1,0 +1,22 @@
+{
+  "name": "PushToTalk DevContainer",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+  "extensions": [],
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=${env:XDG_RUNTIME_DIR}/wayland-0,target=/run/user/1000/wayland-0,type=bind"
+  ],
+  "runArgs": [
+    "--network=host",
+    "--env", "WAYLAND_DISPLAY=wayland-0",
+    "--env", "XDG_RUNTIME_DIR=/run/user/1000",
+    "--env", "DISPLAY=${env:DISPLAY}",
+    "--env", "QT_QPA_PLATFORM=wayland"
+  ],
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y build-essential cmake"
+}
