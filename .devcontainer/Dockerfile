@@ -23,10 +23,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install latest CMake (3.29.2) from Kitware
-RUN wget https://github.com/Kitware/CMake/releases/download/v4.0.2/cmake-v4.0.2-linux-x86_64.sh && \
-    chmod +x cmake-v4.0.2-linux-x86_64.sh && \
-    ./cmake-v4.0.2-linux-x86_64.sh --skip-license --prefix=/usr/local && \
-    rm cmake-v4.0.2-linux-x86_64.sh
+RUN wget https://github.com/Kitware/CMake/releases/download/v4.0.2/cmake-4.0.2-linux-x86_64.sh && \
+    chmod +x cmake-4.0.2-linux-x86_64.sh && \
+    ./cmake-4.0.2-linux-x86_64.sh --skip-license --prefix=/usr/local && \
+    rm cmake-4.0.2-linux-x86_64.sh
 
 # Create non-root user vscode (Devcontainer default)
 USER vscode
