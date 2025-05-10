@@ -21,8 +21,5 @@ RUN apt-get update && apt-get install -y \
     x11-apps \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user
-RUN useradd -m vscode && echo "vscode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-
 USER vscode
 WORKDIR /home/vscode
