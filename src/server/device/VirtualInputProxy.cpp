@@ -6,70 +6,85 @@
 #include <cstring>
 #include <stdexcept>
 #include <utility>
-#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <linux/uinput.h>
 
 #include "common/utilities/Utility.h"
 #include "common/device/DeviceCapabilities.h"
 
 using namespace DeviceUtils;
 
-VirtualInputProxy::VirtualInputProxy(
-    const uint16_t vendor_id,
-    const uint16_t product_id,
-    const uint32_t uid,
-    const int target_key)
-    : target_key_(target_key) {
-    const std::string device_path = find_device_path(vendor_id, product_id, uid);
-    fd_physical_ = open(device_path.c_str(), O_RDWR);
-    if (fd_physical_ < 0) throw std::runtime_error("Failed to open input device");
+VirtualInputProxy::VirtualInputProxy(const std::vector<DeviceConfig> &configs) {
+    for (const auto &[vendor_id, product_id, uid, target_key]: configs) {
+        std::string device_path = find_device_path(vendor_id, product_id, uid);
+        const int fd_physical = open(device_path.c_str(), O_RDWR);
+        if (fd_physical < 0) {
+            throw std::runtime_error("Failed to open input device: " + device_path);
+        }
 
-    if (ioctl(fd_physical_, EVIOCGRAB, 1) < 0) {
-        close(fd_physical_);
-        throw std::runtime_error("Failed to grab physical device");
+        if (ioctl(fd_physical, EVIOCGRAB, 1) < 0) {
+            close(fd_physical);
+            throw std::runtime_error("Failed to grab physical device: " + device_path);
+        }
+
+        const int ufd = create_virtual_device(fd_physical);
+
+        DeviceContext ctx;
+        ctx.fd_physical = fd_physical;
+        ctx.ufd = ufd;
+        ctx.target_key = target_key;
+        ctx.running = false;
+
+        contexts_.push_back(std::move(ctx));
     }
-
-    create_virtual_device();
 }
 
 VirtualInputProxy::~VirtualInputProxy() {
     stop();
-    if (ufd_ >= 0) {
-        ioctl(ufd_, UI_DEV_DESTROY);
-        close(ufd_);
-    }
-    if (fd_physical_ >= 0) {
-        ioctl(fd_physical_, EVIOCGRAB, 0);
-        close(fd_physical_);
+    for (const auto &ctx: contexts_) {
+        if (ctx.ufd >= 0) {
+            ioctl(ctx.ufd, UI_DEV_DESTROY);
+            close(ctx.ufd);
+        }
+        if (ctx.fd_physical >= 0) {
+            ioctl(ctx.fd_physical, EVIOCGRAB, 0);
+            close(ctx.fd_physical);
+        }
     }
 }
 
-void VirtualInputProxy::set_callback(std::function<void(bool)> callback) {
+void VirtualInputProxy::set_callback(Callback callback) {
     callback_ = std::move(callback);
 }
 
 void VirtualInputProxy::start() {
-    if (running_) return;
+    for (auto &ctx: contexts_) {
+        if (ctx.running) continue;
 
-    running_ = true;
-    listener_thread_ = std::thread([this]() {
-        input_event ev{};
-        while (running_) {
-            if (const ssize_t bytes = Utility::safe_read(fd_physical_, &ev, sizeof(ev)); bytes == sizeof(ev)) {
-                handle_event(ev);
-            } else if (bytes < 0) {
-                if (errno != EAGAIN && errno != EINTR) break;
+        ctx.running = true;
+        ctx.listener_thread = std::thread([this, &ctx]() {
+            input_event ev{};
+            while (ctx.running) {
+                if (const ssize_t bytes = Utility::safe_read(ctx.fd_physical, &ev, sizeof(ev)); bytes == sizeof(ev)) {
+                    handle_event(ctx, ev);
+                } else if (bytes < 0) {
+                    if (errno != EAGAIN && errno != EINTR) break;
+                }
             }
-        }
-    });
+        });
+    }
 }
 
 void VirtualInputProxy::stop() {
-    running_ = false;
-    if (listener_thread_.joinable()) {
-        listener_thread_.join();
+    for (auto &ctx: contexts_) {
+        ctx.running = false;
+    }
+    for (auto &ctx: contexts_) {
+        if (ctx.listener_thread.joinable()) {
+            ctx.listener_thread.join();
+        }
     }
 }
 
@@ -90,11 +105,12 @@ std::string VirtualInputProxy::find_device_path(const uint16_t vendor_id, const 
             std::string sysfs_path = "/sys/class/input/" + name + "/device/";
             std::string dev_path = "/dev/input/" + name;
 
-            uint16_t vendor = read_id_from_file(sysfs_path + "id/vendor");
-            uint16_t product = read_id_from_file(sysfs_path + "id/product");
+            const uint16_t vendor = read_id_from_file(sysfs_path + "id/vendor");
+            // ReSharper disable once CppTooWideScopeInitStatement
+            const uint16_t product = read_id_from_file(sysfs_path + "id/product");
             if (vendor != vendor_id || product != product_id) continue;
 
-            int tmp_fd = open(dev_path.c_str(), O_RDONLY);
+            const int tmp_fd = open(dev_path.c_str(), O_RDONLY);
             if (tmp_fd < 0) continue;
 
             DeviceCapabilities caps = get_device_capabilities(tmp_fd);
@@ -114,60 +130,62 @@ std::string VirtualInputProxy::find_device_path(const uint16_t vendor_id, const 
     return found_path;
 }
 
-void VirtualInputProxy::create_virtual_device() {
-    ufd_ = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
-    if (ufd_ < 0) {
+int VirtualInputProxy::create_virtual_device(const int physical_fd) {
+    const int ufd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+    if (ufd < 0) {
         throw std::runtime_error("Failed to open uinput");
     }
 
-    setup_capabilities();
+    setup_capabilities(physical_fd, ufd);
 
     uinput_user_dev uidev = {};
     strncpy(uidev.name, "PTT Virtual Device", UINPUT_MAX_NAME_SIZE);
     uidev.id.bustype = BUS_VIRTUAL;
 
-    if (Utility::safe_write(ufd_, &uidev, sizeof(uidev)) != sizeof(uidev)) {
-        close(ufd_);
+    if (Utility::safe_write(ufd, &uidev, sizeof(uidev)) != sizeof(uidev)) {
+        close(ufd);
         throw std::runtime_error("Failed to write uinput config");
     }
 
-    if (ioctl(ufd_, UI_DEV_CREATE) < 0) {
-        close(ufd_);
+    if (ioctl(ufd, UI_DEV_CREATE) < 0) {
+        close(ufd);
         throw std::runtime_error("Failed to create virtual device");
     }
+
+    return ufd;
 }
 
-void VirtualInputProxy::setup_capabilities() const {
+void VirtualInputProxy::setup_capabilities(const int physical_fd, const int ufd) {
     unsigned long evtypes[EV_MAX / 8 + 1] = {0};
-    if (ioctl(fd_physical_, EVIOCGBIT(0, EV_MAX), evtypes) < 0) {
-        close(ufd_);
+    if (ioctl(physical_fd, EVIOCGBIT(0, EV_MAX), evtypes) < 0) {
+        close(ufd);
         throw std::runtime_error("Failed to get event types");
     }
 
     for (int ev = 0; ev < EV_MAX; ++ev) {
         if (test_bit(ev, evtypes)) {
-            ioctl(ufd_, UI_SET_EVBIT, ev);
-            setup_event_codes(ev);
+            ioctl(ufd, UI_SET_EVBIT, ev);
+            setup_event_codes(physical_fd, ufd, ev);
         }
     }
 }
 
-void VirtualInputProxy::setup_event_codes(const int ev_type) const {
+void VirtualInputProxy::setup_event_codes(const int physical_fd, const int ufd, const int ev_type) {
     unsigned long codes[KEY_MAX / 8 + 1] = {};
     const int max_code = get_max_code(ev_type);
 
-    if (ioctl(fd_physical_, EVIOCGBIT(ev_type, max_code), codes) < 0) {
+    if (ioctl(physical_fd, EVIOCGBIT(ev_type, max_code), codes) < 0) {
         return;
     }
 
     for (int code = 0; code < max_code; ++code) {
         if (test_bit(code, codes)) {
-            set_virtual_bit(ev_type, code);
+            set_virtual_bit(ufd, ev_type, code);
         }
     }
 }
 
-int VirtualInputProxy::get_max_code(const int ev_type) {
+int VirtualInputProxy::get_max_code(int ev_type) {
     switch (ev_type) {
         case EV_KEY: return KEY_MAX;
         case EV_REL: return REL_MAX;
@@ -178,26 +196,27 @@ int VirtualInputProxy::get_max_code(const int ev_type) {
     }
 }
 
-void VirtualInputProxy::set_virtual_bit(const int ev_type, const int code) const {
+void VirtualInputProxy::set_virtual_bit(const int ufd, const int ev_type, const int code) {
     switch (ev_type) {
-        case EV_KEY: ioctl(ufd_, UI_SET_KEYBIT, code);
+        case EV_KEY: ioctl(ufd, UI_SET_KEYBIT, code);
             break;
-        case EV_REL: ioctl(ufd_, UI_SET_RELBIT, code);
+        case EV_REL: ioctl(ufd, UI_SET_RELBIT, code);
             break;
-        case EV_ABS: ioctl(ufd_, UI_SET_ABSBIT, code);
+        case EV_ABS: ioctl(ufd, UI_SET_ABSBIT, code);
             break;
-        case EV_MSC: ioctl(ufd_, UI_SET_MSCBIT, code);
+        case EV_MSC: ioctl(ufd, UI_SET_MSCBIT, code);
             break;
-        case EV_LED: ioctl(ufd_, UI_SET_LEDBIT, code);
+        case EV_LED: ioctl(ufd, UI_SET_LEDBIT, code);
             break;
+        default: break;
     }
 }
 
-void VirtualInputProxy::handle_event(const input_event &ev) const {
-    if (ev.type == EV_KEY && ev.code == target_key_) {
-        if (callback_) callback_(ev.value);
+void VirtualInputProxy::handle_event(DeviceContext &ctx, const input_event &ev) const {
+    if (ev.type == EV_KEY && ev.code == ctx.target_key) {
+        if (callback_) callback_(ctx.target_key, ev.value);
     } else {
-        Utility::safe_write(ufd_, &ev, sizeof(ev));
+        Utility::safe_write(ctx.ufd, &ev, sizeof(ev));
     }
 }
 

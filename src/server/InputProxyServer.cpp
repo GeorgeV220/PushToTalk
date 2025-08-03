@@ -97,46 +97,44 @@ void InputProxyServer::handle_client(int client_fd) {
             throw std::runtime_error("Unauthorized client UID");
         }
 
-        struct InitParams {
-            uint16_t vendor_id;
-            uint16_t product_id;
-            uint32_t uid;
-            int target_key;
-        } params{};
-
-        if (Utility::safe_read(client_fd, &params, sizeof(params)) != sizeof(params)) {
-            throw std::runtime_error("Invalid init parameters");
+        uint32_t count;
+        if (Utility::safe_read(client_fd, &count, sizeof(count)) != sizeof(count)) {
+            throw std::runtime_error("Failed to read config count");
         }
 
-        Utility::debugPrint("Received Data:");
-        std::ostringstream vendor_oss;
-        vendor_oss << std::hex << params.vendor_id;
-        Utility::debugPrint("vendor_id: " + vendor_oss.str());
+        if (count > 1000) {
+            throw std::runtime_error("Too many configs from client");
+        }
 
-        std::ostringstream product_oss;
-        product_oss << std::hex << params.product_id;
-        Utility::debugPrint("product_id: " + product_oss.str());
+        InitParams params = {};
+        params.configs.resize(count);
 
-        std::ostringstream uid_oss;
-        uid_oss << std::hex << params.uid;
-        Utility::debugPrint("uid: " + uid_oss.str());
+        for (uint32_t i = 0; i < count; ++i) {
+            std::cout << "Reading config " << i << std::endl;
+            if (Utility::safe_read(client_fd, &params.configs[i], sizeof(DeviceConfig)) != sizeof(DeviceConfig)) {
+                throw std::runtime_error("Failed to read device config");
+            }
+        }
 
-        Utility::debugPrint("target_key: " + std::to_string(params.target_key));
+        for (const auto &[vendor_id, product_id, uid, target_key]: params.configs) {
+            Utility::debugPrint("Config:");
+            Utility::debugPrint("vendor_id: " + std::to_string(vendor_id));
+            Utility::debugPrint("product_id: " + std::to_string(product_id));
+            Utility::debugPrint("uid: " + std::to_string(uid));
+            Utility::debugPrint("target_key: " + std::to_string(target_key));
+        }
+        const std::vector configs = {
+            params.configs
+        };
 
-        VirtualInputProxy vip(
-            params.vendor_id,
-            params.product_id,
-            params.uid,
-            params.target_key
-        );
-
-        vip.set_callback([client_fd](const bool state) {
+        VirtualInputProxy proxy(configs);
+        proxy.set_callback([client_fd](const int key, const bool state) {
+            std::cout << "Sending event for key " << key << " to client " << client_fd << std::endl;
             if (Utility::safe_write(client_fd, &state, sizeof(state)) != sizeof(state)) {
                 throw std::runtime_error("Client write failed");
             }
         });
-
-        vip.start();
+        proxy.start();
 
         fd_set read_fds;
         char buf;
@@ -144,13 +142,13 @@ void InputProxyServer::handle_client(int client_fd) {
             FD_ZERO(&read_fds);
             FD_SET(client_fd, &read_fds);
 
-            if (int ret = select(client_fd + 1, &read_fds, nullptr, nullptr, nullptr); ret < 0) {
+            if (const int ret = select(client_fd + 1, &read_fds, nullptr, nullptr, nullptr); ret < 0) {
                 std::cerr << "select() failed: " << strerror(errno) << std::endl;
                 break;
             }
 
             if (FD_ISSET(client_fd, &read_fds)) {
-                ssize_t n = Utility::safe_read(client_fd, &buf, sizeof(buf));
+                const ssize_t n = Utility::safe_read(client_fd, &buf, sizeof(buf));
                 if (n == 0) {
                     break;
                 }

@@ -17,25 +17,16 @@ InputClient::~InputClient() {
     stop();
 }
 
-void InputClient::set_vendor_id(const uint16_t vendor_id) {
-    vendor_id_ = vendor_id;
-}
-
-void InputClient::set_product_id(const uint16_t product_id) {
-    product_id_ = product_id;
-}
-
-void InputClient::set_device_uid(const uint32_t uid) {
-    uid_ = uid;
-}
-
-void InputClient::set_target_key(const int target_key) {
-    target_key_ = target_key;
-}
-
 void InputClient::set_callback(std::function<void(bool)> callback) {
     callback_ = std::move(callback);
 }
+
+void InputClient::add_device(const uint16_t vendor_id, const uint16_t product_id, const uint32_t uid,
+                             const int target_key) {
+    const DeviceConfig config = {vendor_id, product_id, uid, target_key};
+    configs_.push_back(config);
+}
+
 
 void InputClient::start() {
     if (running_) {
@@ -66,34 +57,31 @@ void InputClient::start() {
         );
     }
 
-    const struct InitParams {
-        uint16_t vendor_id;
-        uint16_t product_id;
-        uint32_t uid;
-        int target_key;
-    } params = {
-                vendor_id_,
-                product_id_,
-                uid_,
-                target_key_
-            };
 
-    Utility::debugPrint("Sending Data:");
-    std::ostringstream vendor_oss;
-    vendor_oss << "vendor_id: " << std::hex << params.vendor_id;
-    Utility::debugPrint(vendor_oss.str());
-    std::ostringstream product_oss;
-    product_oss << "product_id: " << std::hex << params.product_id;
-    Utility::debugPrint(product_oss.str());
-    std::ostringstream uid_oss;
-    uid_oss << "uid: " << std::hex << params.uid;
-    Utility::debugPrint(uid_oss.str());
-    Utility::debugPrint("target key: " + std::to_string(target_key_));
+    InitParams params;
+    params.configs = configs_;
 
-    if (Utility::safe_write(sock_fd_, &params, sizeof(params)) != sizeof(params)) {
+    for (const auto &[vendor_id, product_id, uid, target_key]: configs_) {
+        Utility::debugPrint("Config:");
+        Utility::debugPrint("vendor_id: " + std::to_string(vendor_id));
+        Utility::debugPrint("product_id: " + std::to_string(product_id));
+        Utility::debugPrint("uid: " + std::to_string(uid));
+        Utility::debugPrint("target key: " + std::to_string(target_key));
+    }
+
+    const auto count = static_cast<uint32_t>(params.configs.size());
+    if (Utility::safe_write(sock_fd_, &count, sizeof(count)) != sizeof(count)) {
         shutdown(sock_fd_, SHUT_RDWR);
         close(sock_fd_);
-        throw std::runtime_error("Parameter send failed");
+        throw std::runtime_error("Parameter count send failed");
+    }
+
+    for (const auto &cfg: params.configs) {
+        if (Utility::safe_write(sock_fd_, &cfg, sizeof(DeviceConfig)) != sizeof(DeviceConfig)) {
+            shutdown(sock_fd_, SHUT_RDWR);
+            close(sock_fd_);
+            throw std::runtime_error("Parameter config send failed");
+        }
     }
 
     running_ = true;

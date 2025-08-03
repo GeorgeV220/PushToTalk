@@ -4,6 +4,8 @@
 #include <functional>
 #include <thread>
 
+struct DeviceConfig;
+
 class InputClient {
 public:
     ~InputClient();
@@ -16,19 +18,10 @@ public:
 
     void set_callback(std::function<void(bool)> callback);
 
-    void set_vendor_id(uint16_t vendor_id);
-
-    void set_product_id(uint16_t product_id);
-
-    void set_device_uid(uint32_t uid);
-
-    void set_target_key(int target_key);
+    void add_device(uint16_t vendor_id, uint16_t product_id, uint32_t uid, int target_key);
 
 private:
-    uint16_t vendor_id_ = 0;
-    uint16_t product_id_ = 0;
-    uint32_t uid_ = 0;
-    int target_key_ = -1;
+    std::vector<DeviceConfig> configs_;
 
     int sock_fd_ = -1;
     std::thread listener_thread_;

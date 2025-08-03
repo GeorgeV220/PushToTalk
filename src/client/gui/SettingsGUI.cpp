@@ -51,10 +51,7 @@ gboolean safe_save_settings(const gpointer data) {
 
         InputClient &client = PushToTalkApp::getInstance().getClient();
 
-        client.set_product_id(Settings::settings.getProductID());
-        client.set_vendor_id(Settings::settings.getVendorID());
-        client.set_device_uid(Settings::settings.getDeviceUID());
-        client.set_target_key(Settings::settings.sButton);
+        client.add_device(Settings::settings.getVendorID(), Settings::settings.getProductID(),Settings::settings.getDeviceUID(), Settings::settings.sButton);
         client.restart();
     } else {
         Utility::error("Invalid button value.");

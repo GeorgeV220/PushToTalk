@@ -75,10 +75,7 @@ void PushToTalkApp::run() {
     createTrayIcon();
 
     pushToTalkThread = std::thread([this]() {
-        client_.set_vendor_id(Settings::settings.getVendorID());
-        client_.set_product_id(Settings::settings.getProductID());
-        client_.set_device_uid(Settings::settings.getDeviceUID());
-        client_.set_target_key(Settings::settings.sButton);
+        client_.add_device(Settings::settings.getVendorID(), Settings::settings.getProductID(),Settings::settings.getDeviceUID(), Settings::settings.sButton);
         try {
             client_.set_callback([](const bool pressed) {
                 Utility::debugPrint(

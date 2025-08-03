@@ -12,10 +12,13 @@ struct DeviceCapabilities {
 };
 
 namespace DeviceUtils {
-    uint16_t read_id_from_file(const std::string& path);
+    uint16_t read_id_from_file(const std::string &path);
+
     DeviceCapabilities get_device_capabilities(int fd);
-    uint32_t generate_uid(const DeviceCapabilities& caps);
-    bool test_bit(int bit, const unsigned long* arr);
+
+    uint32_t generate_uid(const DeviceCapabilities &caps);
+
+    bool test_bit(int bit, const unsigned long *arr);
 }
 
 #endif // DEVICECAPABILITIES_H

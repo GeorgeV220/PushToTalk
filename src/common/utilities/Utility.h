@@ -1,8 +1,21 @@
 #ifndef UTILITY_H
 #define UTILITY_H
 
+#include <cstdint>
 #include <string>
 #include <vector>
+
+
+struct DeviceConfig {
+    uint16_t vendor_id;
+    uint16_t product_id;
+    uint32_t uid;
+    int target_key;
+};
+
+struct InitParams {
+    std::vector<DeviceConfig> configs;
+};
 
 struct UserInfo {
     std::string name;
