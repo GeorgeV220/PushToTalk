@@ -1,6 +1,5 @@
 #include "PushToTalkApp.h"
 #include "common/utilities/Utility.h"
-#include "common/utilities/numbers/Conversion.h"
 #include "gui/SettingsGUI.h"
 #include "utilities/Settings.h"
 #include "utilities/AudioUtilities.h"
@@ -75,11 +74,14 @@ void PushToTalkApp::run() {
     createTrayIcon();
 
     pushToTalkThread = std::thread([this]() {
-        client_.add_device(Settings::settings.getVendorID(), Settings::settings.getProductID(),Settings::settings.getDeviceUID(), Settings::settings.sButton);
+        for (const DeviceSettings &device_settings: Settings::settings.devices) {
+            client_.add_device(device_settings.getVendorID(), device_settings.getProductID(),
+                               device_settings.getDeviceUID(), device_settings.button);
+        }
         try {
             client_.set_callback([](const bool pressed) {
                 Utility::debugPrint(
-                    "Button " + safeIntToStr(Settings::settings.sButton).str + " " + std::string(
+                    "Button " + std::string(
                         pressed ? "pressed" : "released"));
                 AudioUtilities::playSound(
                     (!pressed ? Settings::settings.sPttOffPath : Settings::settings.sPttOnPath).c_str());

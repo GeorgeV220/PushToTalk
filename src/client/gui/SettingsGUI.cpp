@@ -1,10 +1,10 @@
-#include <fcntl.h>
+#include "SettingsGUI.h"
+
+#include <algorithm>
 #include <gtk/gtk.h>
 #include <iostream>
-#include <linux/input.h>
 #include <mutex>
 
-#include "SettingsGUI.h"
 #include "client/PushToTalkApp.h"
 #include "client/utilities/Settings.h"
 #include "common/utilities/Utility.h"
@@ -12,73 +12,98 @@
 
 std::mutex gtk_mutex;
 GtkWidget *SettingsGUI::settingsWindow = nullptr;
+GtkWidget *deviceBox = nullptr;
+std::vector<std::pair<GtkWidget *, GtkWidget *> > deviceEntries;
 
-struct ButtonData {
-    GtkEntry **entries;
-    bool hideWindow;
-    GtkWidget *window;
-};
+void removeDeviceRow(GtkButton *button, gpointer user_data) {
+    GtkWidget *row = GTK_WIDGET(user_data);
 
-gboolean safe_save_settings(const gpointer data) {
+    // Find and erase the entry from deviceEntries
+    const auto it = std::ranges::remove_if(deviceEntries,
+                                           [row](const std::pair<GtkWidget *, GtkWidget *> &entry) {
+                                               return gtk_widget_get_parent(entry.first) == row;
+                                           }).begin();
+    deviceEntries.erase(it, deviceEntries.end());
+
+    gtk_container_remove(GTK_CONTAINER(deviceBox), row);
+}
+
+void onAddDeviceClicked(GtkButton *, gpointer) {
+    GtkWidget *deviceEntry = gtk_entry_new();
+    GtkWidget *buttonEntry = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(deviceEntry), "vendor:product:uid");
+    gtk_entry_set_placeholder_text(GTK_ENTRY(buttonEntry), "button");
+
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+
+    GtkWidget *removeBtn = gtk_button_new_with_label("X");
+    g_signal_connect(removeBtn, "clicked", G_CALLBACK(removeDeviceRow), row);
+
+    gtk_box_pack_start(GTK_BOX(row), deviceEntry, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(row), buttonEntry, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(row), removeBtn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(deviceBox), row, FALSE, FALSE, 0);
+
+    deviceEntries.emplace_back(deviceEntry, buttonEntry);
+    gtk_widget_show_all(deviceBox);
+}
+
+// ReSharper disable once CppDFAConstantFunctionResult
+gboolean onSaveSettings(gpointer) {
     std::lock_guard lock(gtk_mutex);
-    const auto *buttonData = static_cast<ButtonData *>(data);
 
-    const char *device = gtk_entry_get_text(buttonData->entries[0]);
-    const IntConversionResult buttonResult = safeStrToInt(gtk_entry_get_text(buttonData->entries[1]));
-    const std::string pttOnPath = gtk_entry_get_text(buttonData->entries[2]);
-    const std::string pttOffPath = gtk_entry_get_text(buttonData->entries[3]);
+    std::vector<DeviceSettings> devices;
+    for (const auto &[deviceEntry, buttonEntry]: deviceEntries) {
+        const std::string deviceStr = gtk_entry_get_text(GTK_ENTRY(deviceEntry));
+        const IntConversionResult buttonRes = safeStrToInt(gtk_entry_get_text(GTK_ENTRY(buttonEntry)));
+        if (!buttonRes.success) {
+            Utility::error("Invalid button value.");
+            return G_SOURCE_REMOVE;
+        }
+        devices.push_back({deviceStr, buttonRes.value});
+    }
+
+    const char *onPath = gtk_entry_get_text(
+        GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "pttOn")));
+    const char *offPath = gtk_entry_get_text(
+        GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "pttOff")));
+    const char *volumeStr = gtk_entry_get_text(
+        GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "volume")));
 
     float volume;
     try {
-        volume = std::stof(gtk_entry_get_text(buttonData->entries[4]));
+        const FloatConversionResult volRes = safeStrToFloat(volumeStr);
+        if (!volRes.success) {
+            Utility::error("Invalid volume value.");
+            return G_SOURCE_REMOVE;
+        }
+        volume = volRes.value;
     } catch (...) {
-        Utility::error("Invalid volume value");
+        Utility::error("Invalid volume value.");
         return G_SOURCE_REMOVE;
     }
 
-    if (buttonResult.success) {
-        Settings::settings.saveSettings(
-            device,
-            buttonResult.value,
-            pttOnPath,
-            pttOffPath,
-            volume
-        );
+    Settings::settings.devices = std::move(devices);
+    Settings::settings.sPttOnPath = onPath;
+    Settings::settings.sPttOffPath = offPath;
+    Settings::settings.sVolume = volume;
+    Settings::settings.saveSettings();
 
-        if (buttonData->hideWindow) {
-            gtk_widget_hide(buttonData->window);
-        }
-
-        InputClient &client = PushToTalkApp::getInstance().getClient();
-
-        client.add_device(Settings::settings.getVendorID(), Settings::settings.getProductID(),Settings::settings.getDeviceUID(), Settings::settings.sButton);
-        client.restart();
-    } else {
-        Utility::error("Invalid button value.");
+    InputClient &client = PushToTalkApp::getInstance().getClient();
+    client.clear_devices();
+    for (const auto &dev: Settings::settings.devices) {
+        client.add_device(dev.getVendorID(), dev.getProductID(), dev.getDeviceUID(), dev.button);
     }
+
+    client.restart();
+
+    gtk_widget_hide(SettingsGUI::settingsWindow);
     return G_SOURCE_REMOVE;
 }
 
 
-void onApplyButtonClicked(const GtkButton *button, const gpointer data) {
-    (void) button;
-    auto *buttonData = static_cast<ButtonData *>(data);
-
-    gdk_threads_add_idle(safe_save_settings, buttonData);
-}
-
-void onWindowDestroy(const GtkWidget *widget, const gpointer data) {
-    std::lock_guard lock(gtk_mutex);
-    SettingsGUI::settingsWindow = nullptr;
-
-    const auto *buttonData = static_cast<ButtonData *>(data);
-    delete[] buttonData->entries;
-    delete buttonData;
-}
-
 void SettingsGUI::showSettingsGui() {
     std::lock_guard lock(gtk_mutex);
-
     if (settingsWindow) {
         gtk_window_present(GTK_WINDOW(settingsWindow));
         return;
@@ -86,73 +111,71 @@ void SettingsGUI::showSettingsGui() {
 
     settingsWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(settingsWindow), "Settings");
-    gtk_window_set_default_size(GTK_WINDOW(settingsWindow), 400, 200);
+    gtk_window_set_default_size(GTK_WINDOW(settingsWindow), 400, 300);
 
-    GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+    GtkWidget *mainBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
     gtk_container_set_border_width(GTK_CONTAINER(settingsWindow), 10);
-    gtk_container_add(GTK_CONTAINER(settingsWindow), grid);
+    gtk_container_add(GTK_CONTAINER(settingsWindow), mainBox);
 
-    // Device row
-    GtkWidget *deviceLabel = gtk_label_new("Device:");
-    GtkWidget *deviceEntry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(deviceEntry), Settings::settings.sDevice.c_str());
-    gtk_grid_attach(GTK_GRID(grid), deviceLabel, 0, 0, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), deviceEntry, 1, 0, 1, 1);
+    GtkWidget *scroll = gtk_scrolled_window_new(nullptr, nullptr);
+    gtk_widget_set_vexpand(scroll, TRUE);
+    gtk_box_pack_start(GTK_BOX(mainBox), scroll, TRUE, TRUE, 0);
 
-    // Button row
-    GtkWidget *buttonLabel = gtk_label_new("Button:");
-    GtkWidget *buttonEntry = gtk_entry_new();
-    const std::string buttonText = std::to_string(Settings::settings.sButton);
-    gtk_entry_set_text(GTK_ENTRY(buttonEntry), buttonText.c_str());
-    gtk_grid_attach(GTK_GRID(grid), buttonLabel, 0, 1, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), buttonEntry, 1, 1, 1, 1);
+    deviceBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(scroll), deviceBox);
 
-    // PTT On row
-    GtkWidget *pttOnLabel = gtk_label_new("PTT on:");
-    GtkWidget *pttOnEntry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(pttOnEntry), Settings::settings.sPttOnPath.c_str());
-    gtk_grid_attach(GTK_GRID(grid), pttOnLabel, 0, 2, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), pttOnEntry, 1, 2, 1, 1);
+    for (const auto &[deviceStr, button]: Settings::settings.devices) {
+        GtkWidget *deviceEntry = gtk_entry_new();
+        GtkWidget *buttonEntry = gtk_entry_new();
+        gtk_entry_set_text(GTK_ENTRY(deviceEntry), deviceStr.c_str());
+        gtk_entry_set_text(GTK_ENTRY(buttonEntry), std::to_string(button).c_str());
 
-    // PTT Off row
-    GtkWidget *pttOffLabel = gtk_label_new("PTT off:");
-    GtkWidget *pttOffEntry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(pttOffEntry), Settings::settings.sPttOffPath.c_str());
-    gtk_grid_attach(GTK_GRID(grid), pttOffLabel, 0, 3, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), pttOffEntry, 1, 3, 1, 1);
+        GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
 
-    // Volume row
-    GtkWidget *volumeLabel = gtk_label_new("Volume:");
+        GtkWidget *removeBtn = gtk_button_new_with_label("X");
+        g_signal_connect(removeBtn, "clicked", G_CALLBACK(removeDeviceRow), row);
+
+        gtk_box_pack_start(GTK_BOX(row), deviceEntry, TRUE, TRUE, 0);
+        gtk_box_pack_start(GTK_BOX(row), buttonEntry, TRUE, TRUE, 0);
+        gtk_box_pack_start(GTK_BOX(row), removeBtn, FALSE, FALSE, 0);
+        gtk_box_pack_start(GTK_BOX(deviceBox), row, FALSE, FALSE, 0);
+
+        deviceEntries.emplace_back(deviceEntry, buttonEntry);
+    }
+
+    GtkWidget *addDeviceBtn = gtk_button_new_with_label("+ Add Device");
+    gtk_box_pack_start(GTK_BOX(mainBox), addDeviceBtn, FALSE, FALSE, 0);
+    g_signal_connect(addDeviceBtn, "clicked", G_CALLBACK(onAddDeviceClicked), NULL);
+
+    GtkWidget *pttOn = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(pttOn), Settings::settings.sPttOnPath.c_str());
+    g_object_set_data(G_OBJECT(settingsWindow), "pttOn", pttOn);
+
+    GtkWidget *pttOff = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(pttOff), Settings::settings.sPttOffPath.c_str());
+    g_object_set_data(G_OBJECT(settingsWindow), "pttOff", pttOff);
+
     GtkWidget *volumeEntry = gtk_entry_new();
-    const std::string volumeText = std::to_string(Settings::settings.sVolume);
-    gtk_entry_set_text(GTK_ENTRY(volumeEntry), volumeText.c_str());
-    gtk_grid_attach(GTK_GRID(grid), volumeLabel, 0, 4, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), volumeEntry, 1, 4, 1, 1);
+    gtk_entry_set_text(GTK_ENTRY(volumeEntry), std::to_string(Settings::settings.sVolume).c_str());
+    g_object_set_data(G_OBJECT(settingsWindow), "volume", volumeEntry);
 
-    // Buttons row
-    GtkWidget *applyAndHideButton = gtk_button_new_with_label("Apply and Hide");
-    GtkWidget *applyButton = gtk_button_new_with_label("Apply");
-    gtk_grid_attach(GTK_GRID(grid), applyAndHideButton, 0, 5, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), applyButton, 1, 5, 1, 1);
+    gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("PTT On Path:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), pttOn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("PTT Off Path:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), pttOff, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("Volume:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), volumeEntry, FALSE, FALSE, 0);
 
-    // Set entries array
-    auto **entries = new GtkEntry *[5]{
-        GTK_ENTRY(deviceEntry),
-        GTK_ENTRY(buttonEntry),
-        GTK_ENTRY(pttOnEntry),
-        GTK_ENTRY(pttOffEntry),
-        GTK_ENTRY(volumeEntry)
-    };
+    GtkWidget *saveBtn = gtk_button_new_with_label("Save & Close");
+    gtk_box_pack_start(GTK_BOX(mainBox), saveBtn, FALSE, FALSE, 0);
+    g_signal_connect(saveBtn, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) {
+                         gdk_threads_add_idle(onSaveSettings, nullptr);
+                         }), NULL);
 
-    auto *applyAndQuitData = new ButtonData{entries, true, settingsWindow};
-    auto *applyOnlyData = new ButtonData{entries, false, settingsWindow};
-
-    // Connect signals
-    g_signal_connect(applyAndHideButton, "clicked", G_CALLBACK(onApplyButtonClicked), applyAndQuitData);
-    g_signal_connect(applyButton, "clicked", G_CALLBACK(onApplyButtonClicked), applyOnlyData);
-    g_signal_connect(settingsWindow, "destroy", G_CALLBACK(onWindowDestroy), applyAndQuitData);
+    g_signal_connect(settingsWindow, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer) {
+                         settingsWindow = nullptr;
+                         deviceEntries.clear();
+                         }), NULL);
 
     gtk_widget_show_all(settingsWindow);
 }

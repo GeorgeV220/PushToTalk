@@ -21,6 +21,10 @@ void InputClient::set_callback(std::function<void(bool)> callback) {
     callback_ = std::move(callback);
 }
 
+void InputClient::clear_devices() {
+    configs_.clear();
+}
+
 void InputClient::add_device(const uint16_t vendor_id, const uint16_t product_id, const uint32_t uid,
                              const int target_key) {
     const DeviceConfig config = {vendor_id, product_id, uid, target_key};

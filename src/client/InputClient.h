@@ -18,6 +18,8 @@ public:
 
     void set_callback(std::function<void(bool)> callback);
 
+    void clear_devices();
+
     void add_device(uint16_t vendor_id, uint16_t product_id, uint32_t uid, int target_key);
 
 private:

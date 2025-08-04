@@ -1,37 +1,53 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
-#include <cstdint>
-#include <mutex>
 #include <string>
+#include <vector>
+#include <mutex>
+
+#include "common/utilities/Utility.h"
+#include "common/utilities/numbers/Conversion.h"
+
+struct DeviceSettings {
+    std::string deviceStr;
+    int button;
+
+    [[nodiscard]] uint32_t getVendorID() const {
+        const auto result = safeStrToUInt32(Utility::split(deviceStr, ':')[0]);
+        return result.success ? result.value : 0;
+    }
+
+    [[nodiscard]] uint32_t getProductID() const {
+        const auto result = safeStrToUInt32(Utility::split(deviceStr, ':')[1]);
+        return result.success ? result.value : 0;
+    }
+
+    [[nodiscard]] uint32_t getDeviceUID() const {
+        const auto result = safeStrToUInt32(Utility::split(deviceStr, ':')[2]);
+        return result.success ? result.value : 0;
+    }
+};
 
 class Settings {
-private:
-    std::string configFilePath;
-    std::string configDirPath;
-
 public:
     static Settings settings;
-    std::string sDevice;
-    int sButton;
+
+    std::vector<DeviceSettings> devices;
     std::string sPttOnPath;
     std::string sPttOffPath;
     float sVolume;
 
-    Settings();
+    void saveSettings();
 
     void loadSettings();
 
-    void saveSettings(const std::string &device, int button, std::string pttOnPath,
-                      std::string pttOffPath, float volume);
+    std::string configFilePath;
+    std::string configDirPath;
 
-    [[nodiscard]] uint16_t getVendorID() const;
-    [[nodiscard]] uint16_t getProductID() const;
-    [[nodiscard]] uint32_t getDeviceUID() const;
-
-    static void setPath(const std::string &path);
 private:
     std::mutex settingsMutex;
+
+    Settings();
 };
 
 #endif // SETTINGS_H
