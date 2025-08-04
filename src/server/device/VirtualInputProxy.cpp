@@ -1,4 +1,6 @@
 #include "VirtualInputProxy.h"
+
+#include <algorithm>
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -16,29 +18,110 @@
 
 using namespace DeviceUtils;
 
-VirtualInputProxy::VirtualInputProxy(const std::vector<DeviceConfig> &configs) {
-    for (const auto &[vendor_id, product_id, uid, target_key]: configs) {
-        std::string device_path = find_device_path(vendor_id, product_id, uid);
-        const int fd_physical = open(device_path.c_str(), O_RDWR);
-        if (fd_physical < 0) {
-            throw std::runtime_error("Failed to open input device: " + device_path);
-        }
-
-        if (ioctl(fd_physical, EVIOCGRAB, 1) < 0) {
-            close(fd_physical);
-            throw std::runtime_error("Failed to grab physical device: " + device_path);
-        }
-
-        const int ufd = create_virtual_device(fd_physical);
-
-        DeviceContext ctx;
-        ctx.fd_physical = fd_physical;
-        ctx.ufd = ufd;
-        ctx.target_key = target_key;
-        ctx.running = false;
-
-        contexts_.push_back(std::move(ctx));
+void VirtualInputProxy::add_failed_config(const DeviceConfig &config) {
+    const auto already_failed = std::ranges::any_of(failed_configs,
+                                                    [&](const DeviceConfig &dc) {
+                                                        return dc.vendor_id == config.vendor_id &&
+                                                               dc.product_id == config.product_id &&
+                                                               dc.uid == config.uid &&
+                                                               dc.target_key == config.target_key;
+                                                    });
+    if (!already_failed) {
+        failed_configs.push_back(config);
     }
+}
+
+void VirtualInputProxy::remove_failed_config(const DeviceConfig &config) {
+    std::erase_if(failed_configs,
+                  [&](const DeviceConfig &dc) {
+                      return dc.vendor_id == config.vendor_id &&
+                             dc.product_id == config.product_id &&
+                             dc.uid == config.uid &&
+                             dc.target_key == config.target_key;
+                  });
+}
+
+void VirtualInputProxy::retry_failed_configs() {
+    for (const auto configs_copy = failed_configs; const auto &config: configs_copy) {
+        remove_failed_config(config);
+        add_device(config);
+    }
+}
+
+
+void VirtualInputProxy::add_device(const DeviceConfig &config) {
+    const auto &[vendor_id, product_id, uid, target_key] = config;
+    const std::string device_path = find_device_path(vendor_id, product_id, uid);
+    if (device_path.empty()) {
+        add_failed_config(config);
+
+        Utility::error(
+            "Failed to find input device: " + std::to_string(vendor_id) + ":" + std::to_string(product_id) + ":" +
+            std::to_string(uid)
+        );
+        return;
+    }
+
+    const int fd_physical = open(device_path.c_str(), O_RDWR);
+    if (fd_physical < 0) {
+        add_failed_config(config);
+
+        Utility::error("Failed to open input device: " + device_path);
+        return;
+    }
+
+    if (ioctl(fd_physical, EVIOCGRAB, 1) < 0) {
+        add_failed_config(config);
+
+        close(fd_physical);
+        Utility::error("Failed to grab physical device: " + device_path);
+        return;
+    }
+
+    const int ufd = create_virtual_device(fd_physical);
+    if (ufd < 0) {
+        add_failed_config(config);
+
+        ioctl(fd_physical, EVIOCGRAB, 0);
+        close(fd_physical);
+        Utility::error("Failed to create virtual device for: " + device_path);
+        return;
+    }
+
+    remove_failed_config(config);
+
+    DeviceContext ctx;
+    ctx.fd_physical = fd_physical;
+    ctx.ufd = ufd;
+    ctx.target_key = target_key;
+    ctx.running = false;
+
+    contexts_.push_back(std::move(ctx));
+}
+
+void VirtualInputProxy::remove_device(const DeviceConfig &config) {
+    const auto it = std::ranges::find_if(contexts_,
+                                         [&](const DeviceContext &ctx) {
+                                             return ctx.target_key == config.target_key;
+                                         });
+
+    if (it != contexts_.end()) {
+        it->running = false;
+        if (it->listener_thread.joinable()) {
+            it->listener_thread.join();
+        }
+        if (it->fd_physical >= 0) {
+            ioctl(it->fd_physical, EVIOCGRAB, 0);
+            close(it->fd_physical);
+        }
+        if (it->ufd >= 0) {
+            ioctl(it->ufd, UI_DEV_DESTROY);
+            close(it->ufd);
+        }
+        contexts_.erase(it);
+    }
+
+    remove_failed_config(config);
 }
 
 VirtualInputProxy::~VirtualInputProxy() {
@@ -59,7 +142,28 @@ void VirtualInputProxy::set_callback(Callback callback) {
     callback_ = std::move(callback);
 }
 
+void VirtualInputProxy::start_retry_loop() {
+    if (running) return;
+    running = true;
+    retry_thread = std::thread([this]() {
+        while (running) {
+            retry_failed_configs();
+            for (int i = 0; i < 50 && running; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+    });
+}
+
+
+void VirtualInputProxy::stop_retry_loop() {
+    running = false;
+    if (retry_thread.joinable())
+        retry_thread.join();
+}
+
 void VirtualInputProxy::start() {
+    start_retry_loop();
     for (auto &ctx: contexts_) {
         if (ctx.running) continue;
 
@@ -86,13 +190,17 @@ void VirtualInputProxy::stop() {
             ctx.listener_thread.join();
         }
     }
+    stop_retry_loop();
 }
 
 std::string VirtualInputProxy::find_device_path(const uint16_t vendor_id, const uint16_t product_id,
                                                 const uint32_t expected_uid) {
     std::cout << std::hex << vendor_id << ":" << std::hex << product_id << ":" << std::hex << expected_uid << std::endl;
     DIR *dir = opendir("/sys/class/input/");
-    if (!dir) throw std::runtime_error("Can't access input devices");
+    if (!dir) {
+        Utility::error("Can't open input devices directory");
+        return "";
+    }
 
     std::string found_path;
     dirent *entry;
@@ -126,15 +234,18 @@ std::string VirtualInputProxy::find_device_path(const uint16_t vendor_id, const 
     }
 
     closedir(dir);
-    if (found_path.empty()) throw std::runtime_error("Device not found");
+    if (found_path.empty()) {
+        Utility::error("Device not found");
+        return "";
+    }
     return found_path;
 }
 
 int VirtualInputProxy::create_virtual_device(const int physical_fd) {
     const int ufd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
     if (ufd < 0) {
-        perror("open(/dev/uinput)");
-        throw std::runtime_error("Failed to open /dev/uinput");
+        Utility::error("Failed to open /dev/uinput");
+        return -1;
     }
 
     bool has_ff = false;
@@ -143,7 +254,7 @@ int VirtualInputProxy::create_virtual_device(const int physical_fd) {
     } catch (const std::exception &e) {
         std::cerr << "setup_capabilities failed: " << e.what() << std::endl;
         close(ufd);
-        throw;
+        return -1;
     }
 
     uinput_user_dev uidev = {};
@@ -160,15 +271,15 @@ int VirtualInputProxy::create_virtual_device(const int physical_fd) {
     }
 
     if (Utility::safe_write(ufd, &uidev, sizeof(uidev)) != sizeof(uidev)) {
-        perror("write(uinput_user_dev)");
+        Utility::error("Failed to write uinput_user_dev struct");
         close(ufd);
-        throw std::runtime_error("Failed to write uinput_user_dev struct");
+        return -1;
     }
 
     if (ioctl(ufd, UI_DEV_CREATE) < 0) {
-        perror("ioctl(UI_DEV_CREATE)");
+        Utility::error("Failed to create virtual uinput device");
         close(ufd);
-        throw std::runtime_error("Failed to create virtual uinput device");
+        return -1;
     }
 
     std::cout << "Successfully created virtual device: " << dev_name << std::endl;

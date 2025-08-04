@@ -6,8 +6,6 @@
 #include <unistd.h>
 #include <cstring>
 #include <stdexcept>
-#include <iostream>
-#include <sstream>
 #include <sys/select.h>
 #include <sys/stat.h>
 
@@ -66,7 +64,7 @@ void InputProxyServer::setup_socket() {
         FD_SET(sock_fd_, &read_fds);
 
         if (const int result = select(sock_fd_ + 1, &read_fds, nullptr, nullptr, nullptr); result < 0) {
-            std::cerr << "select() failed: " << strerror(errno) << std::endl;
+            Utility::error("select() failed: " + std::string(strerror(errno)));
             continue;
         }
 
@@ -110,7 +108,7 @@ void InputProxyServer::handle_client(int client_fd) {
         params.configs.resize(count);
 
         for (uint32_t i = 0; i < count; ++i) {
-            std::cout << "Reading config " << i << std::endl;
+            Utility::debugPrint("Reading config " + std::to_string(i));
             if (Utility::safe_read(client_fd, &params.configs[i], sizeof(DeviceConfig)) != sizeof(DeviceConfig)) {
                 throw std::runtime_error("Failed to read device config");
             }
@@ -127,11 +125,17 @@ void InputProxyServer::handle_client(int client_fd) {
             params.configs
         };
 
-        VirtualInputProxy proxy(configs);
+        VirtualInputProxy proxy;
+        for (const auto &config: configs) {
+            proxy.add_device(config);
+        }
         proxy.set_callback([client_fd](const int key, const bool state) {
-            std::cout << "Sending event for key " << key << " to client " << client_fd << std::endl;
+            Utility::debugPrint(
+                "Sending event for key " + std::to_string(key) + " to client " + std::to_string(client_fd));
             if (Utility::safe_write(client_fd, &state, sizeof(state)) != sizeof(state)) {
-                throw std::runtime_error("Client write failed");
+                Utility::error(
+                    "Failed to send event to client " + std::to_string(client_fd) + ": " + std::string(
+                        strerror(errno)));
             }
         });
         proxy.start();
@@ -143,7 +147,7 @@ void InputProxyServer::handle_client(int client_fd) {
             FD_SET(client_fd, &read_fds);
 
             if (const int ret = select(client_fd + 1, &read_fds, nullptr, nullptr, nullptr); ret < 0) {
-                std::cerr << "select() failed: " << strerror(errno) << std::endl;
+                Utility::error("select() failed: " + std::string(strerror(errno)));
                 break;
             }
 
@@ -153,7 +157,7 @@ void InputProxyServer::handle_client(int client_fd) {
                     break;
                 }
                 if (n < 0) {
-                    std::cerr << "Error reading from client: " << strerror(errno) << std::endl;
+                    Utility::error("Error reading from client: " + std::string(strerror(errno)));
                     break;
                 }
             }
@@ -161,7 +165,7 @@ void InputProxyServer::handle_client(int client_fd) {
 
         shutdown(client_fd, SHUT_RDWR);
     } catch (const std::exception &e) {
-        std::cerr << "Client handling error: " << e.what() << std::endl;
+        Utility::error("Client handling error: " + std::string(e.what()));
     }
 
     close(client_fd);

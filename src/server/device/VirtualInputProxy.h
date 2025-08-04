@@ -15,11 +15,16 @@ class VirtualInputProxy {
 public:
     using Callback = std::function<void(int key, bool state)>;
 
-    explicit VirtualInputProxy(const std::vector<DeviceConfig> &configs);
-
     ~VirtualInputProxy();
 
+    void add_device(const DeviceConfig &config);
+
+    void remove_device(const DeviceConfig &config);
+
     void set_callback(Callback callback);
+
+    void start_retry_loop();
+    void stop_retry_loop();
 
     void start();
 
@@ -28,6 +33,10 @@ public:
     static void detect_devices();
 
 private:
+    std::thread retry_thread;
+    std::atomic<bool> running = false;
+    std::vector<DeviceConfig> failed_configs = {};
+
     struct DeviceContext {
         int fd_physical = -1;
         int ufd = -1;
@@ -64,6 +73,12 @@ private:
 
     std::vector<DeviceContext> contexts_;
     Callback callback_;
+
+    void add_failed_config(const DeviceConfig &config);
+
+    void remove_failed_config(const DeviceConfig &config);
+
+    void retry_failed_configs();
 
     void handle_event(const DeviceContext &ctx, const input_event &ev) const;
 
