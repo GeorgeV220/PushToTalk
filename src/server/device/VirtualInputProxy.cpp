@@ -133,59 +133,91 @@ std::string VirtualInputProxy::find_device_path(const uint16_t vendor_id, const 
 int VirtualInputProxy::create_virtual_device(const int physical_fd) {
     const int ufd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
     if (ufd < 0) {
-        throw std::runtime_error("Failed to open uinput");
+        perror("open(/dev/uinput)");
+        throw std::runtime_error("Failed to open /dev/uinput");
     }
 
-    setup_capabilities(physical_fd, ufd);
+    bool has_ff = false;
+    try {
+        has_ff = setup_capabilities(physical_fd, ufd);
+    } catch (const std::exception &e) {
+        std::cerr << "setup_capabilities failed: " << e.what() << std::endl;
+        close(ufd);
+        throw;
+    }
 
     uinput_user_dev uidev = {};
-    strncpy(uidev.name, "PTT Virtual Device", UINPUT_MAX_NAME_SIZE);
+    const std::string dev_name = "PTT Virtual Device " + std::to_string(ufd);
+    strncpy(uidev.name, dev_name.c_str(), UINPUT_MAX_NAME_SIZE - 1);
+    uidev.name[UINPUT_MAX_NAME_SIZE - 1] = '\0';
     uidev.id.bustype = BUS_VIRTUAL;
+    uidev.id.vendor = 0x1234;
+    uidev.id.product = 0x5678;
+    uidev.id.version = 1;
+
+    if (has_ff) {
+        uidev.ff_effects_max = 16;
+    }
 
     if (Utility::safe_write(ufd, &uidev, sizeof(uidev)) != sizeof(uidev)) {
+        perror("write(uinput_user_dev)");
         close(ufd);
-        throw std::runtime_error("Failed to write uinput config");
+        throw std::runtime_error("Failed to write uinput_user_dev struct");
     }
 
     if (ioctl(ufd, UI_DEV_CREATE) < 0) {
+        perror("ioctl(UI_DEV_CREATE)");
         close(ufd);
-        throw std::runtime_error("Failed to create virtual device");
+        throw std::runtime_error("Failed to create virtual uinput device");
     }
 
+    std::cout << "Successfully created virtual device: " << dev_name << std::endl;
     return ufd;
 }
 
-void VirtualInputProxy::setup_capabilities(const int physical_fd, const int ufd) {
-    unsigned long evtypes[EV_MAX / 8 + 1] = {0};
-    if (ioctl(physical_fd, EVIOCGBIT(0, EV_MAX), evtypes) < 0) {
+bool VirtualInputProxy::setup_capabilities(const int physical_fd, const int ufd) {
+    unsigned long evtypes[EV_MAX / (sizeof(long) * 8) + 1] = {0};
+    if (ioctl(physical_fd, EVIOCGBIT(0, sizeof(evtypes)), evtypes) < 0) {
         close(ufd);
-        throw std::runtime_error("Failed to get event types");
+        throw std::runtime_error("Failed to get event types: " + std::string(strerror(errno)));
     }
+
+    bool has_ff = false;
 
     for (int ev = 0; ev < EV_MAX; ++ev) {
         if (test_bit(ev, evtypes)) {
-            ioctl(ufd, UI_SET_EVBIT, ev);
+            if (ioctl(ufd, UI_SET_EVBIT, ev) < 0) {
+                close(ufd);
+                throw std::runtime_error(
+                    "UI_SET_EVBIT failed for event type " + std::to_string(ev) + ": " + std::string(strerror(errno)));
+            }
+            if (ev == EV_FF) {
+                has_ff = true;
+            }
             setup_event_codes(physical_fd, ufd, ev);
         }
     }
+
+    return has_ff;
 }
 
 void VirtualInputProxy::setup_event_codes(const int physical_fd, const int ufd, const int ev_type) {
-    unsigned long codes[KEY_MAX / 8 + 1] = {};
     const int max_code = get_max_code(ev_type);
+    unsigned long codes[(max_code + sizeof(long) * 8 - 1) / (sizeof(long) * 8)] = {0};
 
-    if (ioctl(physical_fd, EVIOCGBIT(ev_type, max_code), codes) < 0) {
-        return;
+    if (ioctl(physical_fd, EVIOCGBIT(ev_type, sizeof(codes)), codes) < 0) {
+        throw std::runtime_error(
+            "Failed to get event codes for ev_type " + std::to_string(ev_type) + ": " + std::string(strerror(errno)));
     }
 
     for (int code = 0; code < max_code; ++code) {
         if (test_bit(code, codes)) {
-            set_virtual_bit(ufd, ev_type, code);
+            set_virtual_bit(ufd, ev_type, code, physical_fd);
         }
     }
 }
 
-int VirtualInputProxy::get_max_code(int ev_type) {
+int VirtualInputProxy::get_max_code(const int ev_type) {
     switch (ev_type) {
         case EV_KEY: return KEY_MAX;
         case EV_REL: return REL_MAX;
@@ -196,23 +228,49 @@ int VirtualInputProxy::get_max_code(int ev_type) {
     }
 }
 
-void VirtualInputProxy::set_virtual_bit(const int ufd, const int ev_type, const int code) {
+void VirtualInputProxy::set_virtual_bit(const int ufd, const int ev_type, const int code, const int physical_fd) {
     switch (ev_type) {
-        case EV_KEY: ioctl(ufd, UI_SET_KEYBIT, code);
+        case EV_KEY:
+            ioctl(ufd, UI_SET_KEYBIT, code);
             break;
-        case EV_REL: ioctl(ufd, UI_SET_RELBIT, code);
+        case EV_REL:
+            ioctl(ufd, UI_SET_RELBIT, code);
             break;
-        case EV_ABS: ioctl(ufd, UI_SET_ABSBIT, code);
+        case EV_ABS: {
+            ioctl(ufd, UI_SET_ABSBIT, code);
+
+            input_absinfo absinfo{};
+            if (ioctl(physical_fd, EVIOCGABS(code), &absinfo) == 0) {
+                struct uinput_abs_setup abs = {};
+                abs.code = code;
+                abs.absinfo = absinfo;
+                ioctl(ufd, UI_ABS_SETUP, &abs);
+            } else {
+                /* If the physical device doesn't support this event, we
+                 * can try to set a default value for it. */
+                uinput_abs_setup abs = {};
+                abs.code = code;
+                abs.absinfo.minimum = 0;
+                abs.absinfo.maximum = 255;
+                abs.absinfo.flat = 0;
+                abs.absinfo.fuzz = 0;
+                abs.absinfo.resolution = 0;
+                ioctl(ufd, UI_ABS_SETUP, &abs);
+            }
             break;
-        case EV_MSC: ioctl(ufd, UI_SET_MSCBIT, code);
+        }
+        case EV_MSC:
+            ioctl(ufd, UI_SET_MSCBIT, code);
             break;
-        case EV_LED: ioctl(ufd, UI_SET_LEDBIT, code);
+        case EV_LED:
+            ioctl(ufd, UI_SET_LEDBIT, code);
             break;
-        default: break;
+        default:
+            break;
     }
 }
 
-void VirtualInputProxy::handle_event(DeviceContext &ctx, const input_event &ev) const {
+void VirtualInputProxy::handle_event(const DeviceContext &ctx, const input_event &ev) const {
     if (ev.type == EV_KEY && ev.code == ctx.target_key) {
         if (callback_) callback_(ctx.target_key, ev.value);
     } else {
@@ -235,12 +293,10 @@ void VirtualInputProxy::detect_devices() {
 
     struct dirent *entry;
     while ((entry = readdir(dir))) {
-        std::string name(entry->d_name);
-        if (name.substr(0, 5) == "event") {
+        if (std::string name(entry->d_name); name.substr(0, 5) == "event") {
             std::string path = "/dev/input/" + name;
 
-            int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK);
-            if (fd >= 0) {
+            if (int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK); fd >= 0) {
                 fds.push_back(fd);
                 device_paths.push_back(path);
             }

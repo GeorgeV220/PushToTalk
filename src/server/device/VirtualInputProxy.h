@@ -65,15 +65,15 @@ private:
     std::vector<DeviceContext> contexts_;
     Callback callback_;
 
-    void handle_event(DeviceContext &ctx, const input_event &ev) const;
+    void handle_event(const DeviceContext &ctx, const input_event &ev) const;
 
     [[nodiscard]] static int create_virtual_device(int physical_fd);
 
-    static void setup_capabilities(int physical_fd, int ufd);
+    static bool setup_capabilities(int physical_fd, int ufd);
 
     static void setup_event_codes(int physical_fd, int ufd, int ev_type);
 
-    static void set_virtual_bit(int ufd, int ev_type, int code);
+    static void set_virtual_bit(int ufd, int ev_type, int code, int physical_fd);
 
     static std::string find_device_path(uint16_t vendor_id, uint16_t product_id, uint32_t expected_uid);
 

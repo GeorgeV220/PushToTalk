@@ -22,7 +22,7 @@ bool DeviceUtils::test_bit(const int bit, const unsigned long *arr) {
     return arr[bit / (sizeof(long) * 8)] & (1UL << (bit % (sizeof(long) * 8)));
 }
 
-DeviceCapabilities DeviceUtils::get_device_capabilities(int fd) {
+DeviceCapabilities DeviceUtils::get_device_capabilities(const int fd) {
     DeviceCapabilities caps;
 
     char name[256] = "Unknown";
@@ -30,9 +30,13 @@ DeviceCapabilities DeviceUtils::get_device_capabilities(int fd) {
         caps.name = name;
     }
 
-    if (unsigned long key_bits[KEY_MAX / 8 + 1] = {}; ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits) >= 0) {
+    unsigned long key_bits_raw[KEY_MAX / (sizeof(long) * 8) + 1] = {};
+    if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits_raw)), key_bits_raw) >= 0) {
         for (int i = 0; i < KEY_MAX; i++) {
-            if (test_bit(i, key_bits)) caps.num_keys++;
+            if (test_bit(i, key_bits_raw)) {
+                caps.key_bits.set(i);
+                caps.num_keys++;
+            }
         }
     }
 
@@ -54,10 +58,20 @@ DeviceCapabilities DeviceUtils::get_device_capabilities(int fd) {
 
 uint32_t DeviceUtils::generate_uid(const DeviceCapabilities &caps) {
     std::stringstream ss;
-    ss << caps.num_keys << ":"
-            << caps.abs_mask << ":"
-            << caps.rel_mask << ":"
-            << caps.name;
+
+    ss << caps.name << ":" << caps.num_keys << ":" << caps.abs_mask << ":" << caps.rel_mask << ":";
+
+    for (int i = 0; i < KEY_MAX; ++i) {
+        if (caps.key_bits.test(i)) ss << "K" << i << ",";
+    }
+
+    for (int i = 0; i < ABS_MAX; ++i) {
+        if ((caps.abs_mask >> i) & 1) ss << "A" << i << ",";
+    }
+
+    for (int i = 0; i < REL_MAX; ++i) {
+        if ((caps.rel_mask >> i) & 1) ss << "R" << i << ",";
+    }
 
     const std::string uid_str = ss.str();
     return crc32(0, reinterpret_cast<const Bytef *>(uid_str.data()), uid_str.size());

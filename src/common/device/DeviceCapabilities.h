@@ -1,14 +1,17 @@
 #ifndef DEVICECAPABILITIES_H
 #define DEVICECAPABILITIES_H
 
+#include <bitset>
 #include <cstdint>
 #include <string>
+#include <linux/input-event-codes.h>
 
 struct DeviceCapabilities {
     uint32_t num_keys = 0;
     uint32_t abs_mask = 0;
     uint32_t rel_mask = 0;
     std::string name;
+    std::bitset<KEY_MAX> key_bits;
 };
 
 namespace DeviceUtils {
