@@ -36,6 +36,9 @@ public:
     std::string sPttOnPath;
     std::string sPttOffPath;
     float sVolume;
+    int rate;
+    int channels;
+    int buffer_frames;
 
     void saveSettings();
 

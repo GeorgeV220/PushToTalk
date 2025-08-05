@@ -9,10 +9,16 @@
 
 #define DEFAULT_VOLUME 0.1f
 #define DEFAULT_PATH "/home/<user>/Music/ptt_on.mp3"
+#define DEFAULT_PATH_OFF "/home/<user>/Music/ptt_off.mp3"
+#define DEFAULT_RATE 44100
+#define DEFAULT_CHANNELS 1
+#define DEFAULT_BUFFER_FRAMES 16384
 
 Settings Settings::settings;
 
-Settings::Settings() : sPttOnPath(DEFAULT_PATH), sPttOffPath(DEFAULT_PATH), sVolume(DEFAULT_VOLUME) {
+Settings::Settings() : sPttOnPath(DEFAULT_PATH), sPttOffPath(DEFAULT_PATH_OFF), sVolume(DEFAULT_VOLUME),
+                       rate(DEFAULT_RATE),
+                       channels(DEFAULT_CHANNELS), buffer_frames(DEFAULT_BUFFER_FRAMES) {
     const char *homeDir = getenv("HOME");
     if (!homeDir) {
         Utility::error("Unable to determine the home directory");
@@ -43,6 +49,10 @@ void Settings::saveSettings() {
     file << "pttonpath = " << sPttOnPath << "\n";
     file << "pttoffpath = " << sPttOffPath << "\n";
     file << "volume = " << std::fixed << sVolume << "\n";
+    file << "rate = " << rate << "\n";
+    file << "channels = " << channels << "\n";
+    file << "buffer_frames = " << buffer_frames << "\n";
+    file.close();
 }
 
 void Settings::loadSettings() {
@@ -79,6 +89,21 @@ void Settings::loadSettings() {
             auto result = safeStrToFloat(value);
             if (result.success) {
                 sVolume = result.value;
+            }
+        } else if (key == "rate") {
+            auto result = safeStrToInt(value);
+            if (result.success) {
+                rate = result.value;
+            }
+        } else if (key == "channels") {
+            auto result = safeStrToInt(value);
+            if (result.success) {
+                channels = result.value;
+            }
+        } else if (key == "buffer_frames") {
+            auto result = safeStrToInt(value);
+            if (result.success) {
+                buffer_frames = result.value;
             }
         }
     }

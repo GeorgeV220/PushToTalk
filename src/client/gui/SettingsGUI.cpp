@@ -64,11 +64,17 @@ gboolean onSaveSettings(gpointer) {
     }
 
     const char *onPath = gtk_entry_get_text(
-        GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "pttOn")));
+            GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "pttOn")));
     const char *offPath = gtk_entry_get_text(
-        GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "pttOff")));
+            GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "pttOff")));
     const char *volumeStr = gtk_entry_get_text(
-        GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "volume")));
+            GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "volume")));
+    const char *rateStr = gtk_entry_get_text(
+            GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "rate")));
+    const char *channelsStr = gtk_entry_get_text(
+            GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "channels")));
+    const char *bufferFramesStr = gtk_entry_get_text(
+            GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "bufferFrames")));
 
     float volume;
     try {
@@ -82,11 +88,50 @@ gboolean onSaveSettings(gpointer) {
         Utility::error("Invalid volume value.");
         return G_SOURCE_REMOVE;
     }
+    int rate;
+    try {
+        const IntConversionResult rateRes = safeStrToInt(rateStr);
+        if (!rateRes.success) {
+            Utility::error("Invalid rate value.");
+            return G_SOURCE_REMOVE;
+        }
+        rate = rateRes.value;
+    } catch (...) {
+        Utility::error("Invalid rate value.");
+        return G_SOURCE_REMOVE;
+    }
+    int channels;
+    try {
+        const IntConversionResult channelsRes = safeStrToInt(channelsStr);
+        if (!channelsRes.success) {
+            Utility::error("Invalid channels value.");
+            return G_SOURCE_REMOVE;
+        }
+        channels = channelsRes.value;
+    } catch (...) {
+        Utility::error("Invalid channels value.");
+        return G_SOURCE_REMOVE;
+    }
+    int buffer_frames;
+    try {
+        const IntConversionResult bufferFrameRes = safeStrToInt(bufferFramesStr);
+        if (!bufferFrameRes.success) {
+            Utility::error("Invalid buffer size value.");
+            return G_SOURCE_REMOVE;
+        }
+        buffer_frames = bufferFrameRes.value;
+    } catch (...) {
+        Utility::error("Invalid buffer size value.");
+        return G_SOURCE_REMOVE;
+    }
 
     Settings::settings.devices = std::move(devices);
     Settings::settings.sPttOnPath = onPath;
     Settings::settings.sPttOffPath = offPath;
     Settings::settings.sVolume = volume;
+    Settings::settings.rate = rate;
+    Settings::settings.channels = channels;
+    Settings::settings.buffer_frames = buffer_frames;
     Settings::settings.saveSettings();
 
     InputClient &client = PushToTalkApp::getInstance().getClient();
@@ -96,6 +141,10 @@ gboolean onSaveSettings(gpointer) {
     }
 
     client.restart();
+
+    VirtualMicrophone &microphone = PushToTalkApp::getInstance().getVirtualMicrophone();
+    microphone.set_audio_config(rate, channels, buffer_frames);
+    microphone.restart();
 
     gtk_widget_hide(SettingsGUI::settingsWindow);
     return G_SOURCE_REMOVE;
@@ -110,8 +159,8 @@ void SettingsGUI::showSettingsGui() {
     }
 
     settingsWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(settingsWindow), "Settings");
-    gtk_window_set_default_size(GTK_WINDOW(settingsWindow), 400, 300);
+    gtk_window_set_title(GTK_WINDOW(settingsWindow), "PTT Settings");
+    gtk_window_set_default_size(GTK_WINDOW(settingsWindow), 400, 700);
 
     GtkWidget *mainBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
     gtk_container_set_border_width(GTK_CONTAINER(settingsWindow), 10);
@@ -159,6 +208,18 @@ void SettingsGUI::showSettingsGui() {
     gtk_entry_set_text(GTK_ENTRY(volumeEntry), std::to_string(Settings::settings.sVolume).c_str());
     g_object_set_data(G_OBJECT(settingsWindow), "volume", volumeEntry);
 
+    GtkWidget *rateEntry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(rateEntry), std::to_string(Settings::settings.rate).c_str());
+    g_object_set_data(G_OBJECT(settingsWindow), "rate", rateEntry);
+
+    GtkWidget *channelsEntry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(channelsEntry), std::to_string(Settings::settings.channels).c_str());
+    g_object_set_data(G_OBJECT(settingsWindow), "channels", channelsEntry);
+
+    GtkWidget *bufferFramesEntry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(bufferFramesEntry), std::to_string(Settings::settings.buffer_frames).c_str());
+    g_object_set_data(G_OBJECT(settingsWindow), "bufferFrames", bufferFramesEntry);
+
     gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("PTT On Path:"), FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(mainBox), pttOn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("PTT Off Path:"), FALSE, FALSE, 0);
@@ -166,16 +227,25 @@ void SettingsGUI::showSettingsGui() {
     gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("Volume:"), FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(mainBox), volumeEntry, FALSE, FALSE, 0);
 
+    gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("Rate:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), rateEntry, FALSE, FALSE, 0);
+
+    gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("Channels:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), channelsEntry, FALSE, FALSE, 0);
+
+    gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("Buffer Frames:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), bufferFramesEntry, FALSE, FALSE, 0);
+
     GtkWidget *saveBtn = gtk_button_new_with_label("Save & Close");
     gtk_box_pack_start(GTK_BOX(mainBox), saveBtn, FALSE, FALSE, 0);
     g_signal_connect(saveBtn, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) {
-                         gdk_threads_add_idle(onSaveSettings, nullptr);
-                         }), NULL);
+        gdk_threads_add_idle(onSaveSettings, nullptr);
+    }), NULL);
 
     g_signal_connect(settingsWindow, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer) {
-                         settingsWindow = nullptr;
-                         deviceEntries.clear();
-                         }), NULL);
+        settingsWindow = nullptr;
+        deviceEntries.clear();
+    }), NULL);
 
     gtk_widget_show_all(settingsWindow);
 }
