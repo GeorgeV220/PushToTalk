@@ -1,7 +1,9 @@
 #pragma once
+
 #include <thread>
 #include <gtk/gtk.h>
 #include "InputClient.h"
+#include "client/utilities/VirtualMicrophone.h"
 
 class PushToTalkApp {
 public:
@@ -15,10 +17,14 @@ public:
 
     InputClient &getClient() { return client_; }
 
+    VirtualMicrophone &getVirtualMicrophone() { return virtualMicrophone_; }
+
     static PushToTalkApp &getInstance(int argc = 0, char *argv[] = nullptr);
 
 private:
     InputClient client_;
+
+    VirtualMicrophone virtualMicrophone_;
 
     static void initializeGtk(int argc, char *argv[]);
 
@@ -28,8 +34,5 @@ private:
 
     static void onShowSettings(GtkMenuItem *, gpointer);
 
-    std::thread pushToTalkThread;
-    std::thread virtualMicrophoneThread;
     bool showGui = false;
-    std::atomic<bool> running{false};
 };

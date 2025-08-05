@@ -3,7 +3,6 @@
 #include "gui/SettingsGUI.h"
 #include "utilities/Settings.h"
 #include "utilities/AudioUtilities.h"
-#include "client/utilities/VirtualMicrophone.h"
 
 #include <libappindicator/app-indicator.h>
 #include <gtk/gtk.h>
@@ -24,13 +23,12 @@ PushToTalkApp::PushToTalkApp(const int argc, char *argv[]) {
 }
 
 PushToTalkApp::~PushToTalkApp() {
-    if (pushToTalkThread.joinable()) {
-        pushToTalkThread.join();
-    }
-    if (virtualMicrophoneThread.joinable()) {
-        virtualMicrophoneThread.join();
-    }
+    Utility::print("Cleaning up audio system...");
     AudioUtilities::cleanupAudioSystem();
+    Utility::print("Cleaning up client...");
+    client_.stop();
+    Utility::print("Cleaning up virtual microphone...");
+    virtualMicrophone_.stop();
 }
 
 PushToTalkApp &PushToTalkApp::getInstance(const int argc, char *argv[]) {
@@ -78,46 +76,38 @@ void PushToTalkApp::onShowSettings(GtkMenuItem *, gpointer) {
 void PushToTalkApp::run() {
     createTrayIcon();
 
-    pushToTalkThread = std::thread([this]() {
-        for (const DeviceSettings &device_settings: Settings::settings.devices) {
-            client_.add_device(device_settings.getVendorID(), device_settings.getProductID(),
-                               device_settings.getDeviceUID(), device_settings.button);
-        }
-        try {
-            client_.set_callback([](const bool pressed) {
-                Utility::debugPrint(
-                        "Button " + std::string(
-                                pressed ? "pressed" : "released"));
-                AudioUtilities::playSound(
-                        (!pressed ? Settings::settings.sPttOffPath : Settings::settings.sPttOnPath).c_str());
-                AudioUtilities::setMicMute(!pressed);
-            });
+    for (const DeviceSettings &device_settings: Settings::settings.devices) {
+        client_.add_device(device_settings.getVendorID(), device_settings.getProductID(),
+                           device_settings.getDeviceUID(), device_settings.button);
+    }
+    try {
+        client_.set_callback([](const bool pressed) {
+            Utility::debugPrint(
+                    "Button " + std::string(
+                            pressed ? "pressed" : "released"));
+            AudioUtilities::playSound(
+                    (!pressed ? Settings::settings.sPttOffPath : Settings::settings.sPttOnPath).c_str());
+            AudioUtilities::setMicMute(!pressed);
+        });
 
-            client_.start();
-            while (running) {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-            }
-        } catch (const std::exception &e) {
-            Utility::error("Error: " + std::string(e.what()));
-            return 1;
-        }
-        return 0;
-    });
+        client_.start();
+    } catch (const std::exception &e) {
+        Utility::error("Error: " + std::string(e.what()));
+        return;
+    }
 
-    virtualMicrophoneThread = std::thread([]() {
-        try {
-            VirtualMicrophone vm(
-                    "",
-                    "ptt_virtual_mic",
-                    "PTT Virtual Microphone"
-            );
-            std::cout << "Virtual microphone running. Press Ctrl+C to exit." << std::endl;
-            vm.start();
-        } catch (const std::exception &e) {
-            std::cerr << "Error: " << e.what() << std::endl;
-            return;
-        }
-    });
+    try {
+        virtualMicrophone_.set_audio_config(Settings::settings.rate, Settings::settings.channels,
+                                            Settings::settings.buffer_frames);
+        virtualMicrophone_.set_capture_target("");
+        virtualMicrophone_.set_playback_name("ptt_virtual_mic");
+        virtualMicrophone_.set_microphone_name("PTT Virtual Microphone");
+        Utility::print("Starting virtual microphone...");
+        virtualMicrophone_.start();
+    } catch (const std::exception &e) {
+        Utility::error("Virtual Microphone Error: " + std::string(e.what()));
+        return;
+    }
 
     if (showGui) {
         SettingsGUI::showSettingsGui();
@@ -127,6 +117,6 @@ void PushToTalkApp::run() {
 }
 
 void PushToTalkApp::stop() {
-    running = false;
     client_.stop();
+    virtualMicrophone_.stop();
 }
