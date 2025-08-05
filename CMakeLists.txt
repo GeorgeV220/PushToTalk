@@ -8,6 +8,8 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
 pkg_check_modules(APPINDICATOR REQUIRED appindicator3-0.1)
 pkg_check_modules(PULSEAUDIO REQUIRED libpulse)
+pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
+pkg_check_modules(SPA REQUIRED IMPORTED_TARGET libspa-0.2)
 find_package(OpenAL REQUIRED)
 find_package(ZLIB REQUIRED)
 
@@ -42,6 +44,8 @@ add_executable(ptt-client
         src/client/utilities/Settings.h
         src/client/PushToTalkApp.cpp
         src/client/PushToTalkApp.h
+        src/client/utilities/VirtualMicrophone.cpp
+        src/client/utilities/VirtualMicrophone.h
 )
 
 target_include_directories(ptt-client
@@ -50,6 +54,8 @@ target_include_directories(ptt-client
         ${GTK3_INCLUDE_DIRS}
         ${APPINDICATOR_INCLUDE_DIRS}
         ${PULSEAUDIO_INCLUDE_DIRS}
+        ${SPA_INCLUDE_DIRS}
+        ${PIPEWIRE_INCLUDE_DIRS}
         ${OpenAL_INCLUDE_DIR}
         ${MPG123_INCLUDE_DIR}
 )
@@ -59,6 +65,8 @@ target_link_libraries(ptt-client
         ${GTK3_LIBRARIES}
         ${APPINDICATOR_LIBRARIES}
         ${PULSEAUDIO_LIBRARIES}
+        ${PIPEWIRE_LIBRARIES}
+        ${SPA_LIBRARIES}
         ${OPENAL_LIBRARY}
         ${MPG123_LIBRARIES}
 )

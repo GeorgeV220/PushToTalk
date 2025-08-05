@@ -36,33 +36,34 @@ static void context_state_cb(pa_context *c, void *userdata) {
     switch (pa_context_get_state(c)) {
         case PA_CONTEXT_READY: {
             pa_operation *op = pa_context_get_server_info(
-                c, [](pa_context *c, const pa_server_info *i, void *userdata) {
-                    const auto *data = static_cast<CallbackData *>(userdata);
-                    if (!i) {
-                        pa_mainloop_quit(data->ml, 1);
-                        return;
-                    }
-                    pa_operation *op = pa_context_get_source_info_by_name(
-                        c, i->default_source_name, [](pa_context *c, const pa_source_info *i, int eol, void *userdata) {
-                            auto *data = static_cast<CallbackData *>(userdata);
-                            if (eol < 0) {
-                                Utility::error("Failed to get source info");
-                                pa_mainloop_quit(data->ml, 1);
-                                return;
-                            }
-                            if (eol) return;
-                            pa_operation *set_op = pa_context_set_source_mute_by_index(
-                                c, i->index, data->micMute, [](pa_context *c, int success, void *userdata) {
-                                    const auto *data = static_cast<CallbackData *>(userdata);
-                                    if (!success) {
-                                        Utility::error("Failed to set mute state");
+                    c, [](pa_context *c, const pa_server_info *i, void *userdata) {
+                        const auto *data = static_cast<CallbackData *>(userdata);
+                        if (!i) {
+                            pa_mainloop_quit(data->ml, 1);
+                            return;
+                        }
+                        pa_operation *op = pa_context_get_source_info_by_name(
+                                c, "ptt_virtual_mic",
+                                [](pa_context *c, const pa_source_info *i, int eol, void *userdata) {
+                                    auto *data = static_cast<CallbackData *>(userdata);
+                                    if (eol < 0) {
+                                        Utility::error("Failed to get source info");
+                                        pa_mainloop_quit(data->ml, 1);
+                                        return;
                                     }
-                                    pa_mainloop_quit(data->ml, 0);
+                                    if (eol) return;
+                                    pa_operation *set_op = pa_context_set_source_mute_by_index(
+                                            c, i->index, data->micMute, [](pa_context *c, int success, void *userdata) {
+                                                const auto *data = static_cast<CallbackData *>(userdata);
+                                                if (!success) {
+                                                    Utility::error("Failed to set mute state");
+                                                }
+                                                pa_mainloop_quit(data->ml, 0);
+                                            }, userdata);
+                                    pa_operation_unref(set_op);
                                 }, userdata);
-                            pa_operation_unref(set_op);
-                        }, userdata);
-                    pa_operation_unref(op);
-                }, userdata);
+                        pa_operation_unref(op);
+                    }, userdata);
             pa_operation_unref(op);
             break;
         }

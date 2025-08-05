@@ -29,6 +29,7 @@ private:
     static void onShowSettings(GtkMenuItem *, gpointer);
 
     std::thread pushToTalkThread;
+    std::thread virtualMicrophoneThread;
     bool showGui = false;
     std::atomic<bool> running{false};
 };

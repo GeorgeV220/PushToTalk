@@ -3,9 +3,11 @@
 #include "gui/SettingsGUI.h"
 #include "utilities/Settings.h"
 #include "utilities/AudioUtilities.h"
+#include "client/utilities/VirtualMicrophone.h"
 
 #include <libappindicator/app-indicator.h>
 #include <gtk/gtk.h>
+#include <iostream>
 
 PushToTalkApp::PushToTalkApp(const int argc, char *argv[]) {
     Settings::settings.loadSettings();
@@ -25,6 +27,9 @@ PushToTalkApp::~PushToTalkApp() {
     if (pushToTalkThread.joinable()) {
         pushToTalkThread.join();
     }
+    if (virtualMicrophoneThread.joinable()) {
+        virtualMicrophoneThread.join();
+    }
     AudioUtilities::cleanupAudioSystem();
 }
 
@@ -39,9 +44,9 @@ void PushToTalkApp::initializeGtk(int argc, char *argv[]) {
 
 void PushToTalkApp::createTrayIcon() {
     AppIndicator *indicator = app_indicator_new(
-        "push-to-talk-indicator",
-        "system-run",
-        APP_INDICATOR_CATEGORY_APPLICATION_STATUS
+            "push-to-talk-indicator",
+            "system-run",
+            APP_INDICATOR_CATEGORY_APPLICATION_STATUS
     );
     app_indicator_set_status(indicator, APP_INDICATOR_STATUS_ACTIVE);
 
@@ -81,10 +86,10 @@ void PushToTalkApp::run() {
         try {
             client_.set_callback([](const bool pressed) {
                 Utility::debugPrint(
-                    "Button " + std::string(
-                        pressed ? "pressed" : "released"));
+                        "Button " + std::string(
+                                pressed ? "pressed" : "released"));
                 AudioUtilities::playSound(
-                    (!pressed ? Settings::settings.sPttOffPath : Settings::settings.sPttOnPath).c_str());
+                        (!pressed ? Settings::settings.sPttOffPath : Settings::settings.sPttOnPath).c_str());
                 AudioUtilities::setMicMute(!pressed);
             });
 
@@ -97,6 +102,21 @@ void PushToTalkApp::run() {
             return 1;
         }
         return 0;
+    });
+
+    virtualMicrophoneThread = std::thread([]() {
+        try {
+            VirtualMicrophone vm(
+                    "",
+                    "ptt_virtual_mic",
+                    "PTT Virtual Microphone"
+            );
+            std::cout << "Virtual microphone running. Press Ctrl+C to exit." << std::endl;
+            vm.start();
+        } catch (const std::exception &e) {
+            std::cerr << "Error: " << e.what() << std::endl;
+            return;
+        }
     });
 
     if (showGui) {
