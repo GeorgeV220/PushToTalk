@@ -5,16 +5,12 @@
 #include <spa/param/audio/format-utils.h>
 #include <string>
 #include <stdexcept>
+#include <atomic>
+#include <thread>
 
 class VirtualMicrophone {
 public:
-    explicit VirtualMicrophone(
-            std::string capture_target = "",
-            std::string playback_name = "virtual_mic",
-            std::string microphone_name = "Virtual Microphone",
-            uint32_t rate = 44100,
-            uint32_t channels = 1
-    );
+    VirtualMicrophone();
 
     ~VirtualMicrophone();
 
@@ -22,12 +18,22 @@ public:
 
     void stop();
 
+    void restart();
+
+    void set_capture_target(std::string target);
+    void set_playback_name(std::string name);
+    void set_microphone_name(std::string name);
+    void set_audio_config(uint32_t rate, uint32_t channels, uint32_t buffer_frames);
+
+
 private:
     void initialize_pipewire();
 
     void create_streams();
 
-    void cleanup();
+    void cleanup_in_loop();
+
+    void final_cleanup();
 
     void buffer_write(const float *src, uint32_t n_frames);
 
@@ -70,7 +76,8 @@ private:
     std::string microphone_name_;
     uint32_t rate_;
     uint32_t channels_;
-    bool running_;
+    std::thread listener_thread_;
+    std::atomic<bool> running_{false};
 
     static const pw_stream_events capture_events;
     static const pw_stream_events playback_events;

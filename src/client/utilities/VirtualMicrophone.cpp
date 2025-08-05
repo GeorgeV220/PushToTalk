@@ -17,32 +17,21 @@ const pw_stream_events VirtualMicrophone::playback_events = {
         .process = VirtualMicrophone::playback_process
 };
 
-VirtualMicrophone::VirtualMicrophone(
-        std::string capture_target,
-        std::string playback_name,
-        std::string microphone_name,
-        uint32_t rate,
-        uint32_t channels
-) : loop_(nullptr),
-    capture_stream_(nullptr),
-    playback_stream_(nullptr),
-    buffer_(nullptr),
-    buffer_frames_(16384),
-    write_pos_(0),
-    read_pos_(0),
-    frames_available_(0),
-    capture_target_(std::move(capture_target)),
-    playback_name_(std::move(playback_name)),
-    microphone_name_(std::move(microphone_name)),
-    rate_(rate),
-    channels_(channels),
-    running_(false) {
-    initialize_pipewire();
-    create_streams();
-}
+VirtualMicrophone::VirtualMicrophone()
+        : loop_(nullptr),
+          capture_stream_(nullptr),
+          playback_stream_(nullptr),
+          buffer_(nullptr),
+          buffer_frames_(0),
+          write_pos_(0),
+          read_pos_(0),
+          frames_available_(0),
+          rate_(0),
+          channels_(0),
+          running_(false) {}
 
 VirtualMicrophone::~VirtualMicrophone() {
-    cleanup();
+    stop();
 }
 
 void VirtualMicrophone::initialize_pipewire() {
@@ -140,25 +129,70 @@ void VirtualMicrophone::create_streams() {
 }
 
 void VirtualMicrophone::start() {
-    if (!running_) {
-        running_ = true;
-        pw_main_loop_run(loop_);
+    if (running_) {
+        throw std::runtime_error("VirtualMicrophone already running");
     }
+    running_ = true;
+    listener_thread_ = std::thread([this]() {
+        initialize_pipewire();
+        create_streams();
+
+        pw_main_loop_run(loop_);
+
+        cleanup_in_loop();
+    });
 }
 
 void VirtualMicrophone::stop() {
-    if (running_) {
-        running_ = false;
+    if (!running_) return;
+    running_ = false;
+
+    if (loop_) {
         pw_main_loop_quit(loop_);
     }
+
+    if (listener_thread_.joinable()) {
+        listener_thread_.join();
+    }
+
+    final_cleanup();
 }
 
-void VirtualMicrophone::cleanup() {
+void VirtualMicrophone::restart() {
+    stop();
+    start();
+}
+
+void VirtualMicrophone::cleanup_in_loop() {
     if (capture_stream_) pw_stream_destroy(capture_stream_);
     if (playback_stream_) pw_stream_destroy(playback_stream_);
     if (loop_) pw_main_loop_destroy(loop_);
+    capture_stream_ = nullptr;
+    playback_stream_ = nullptr;
+    loop_ = nullptr;
+}
+
+void VirtualMicrophone::final_cleanup() {
     delete[] buffer_;
     pw_deinit();
+}
+
+void VirtualMicrophone::set_capture_target(std::string target) {
+    capture_target_ = std::move(target);
+}
+
+void VirtualMicrophone::set_playback_name(std::string name) {
+    playback_name_ = std::move(name);
+}
+
+void VirtualMicrophone::set_microphone_name(std::string name) {
+    microphone_name_ = std::move(name);
+}
+
+void VirtualMicrophone::set_audio_config(uint32_t rate, uint32_t channels, uint32_t buffer_frames) {
+    rate_ = rate;
+    channels_ = channels;
+    buffer_frames_ = buffer_frames;
 }
 
 void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {
