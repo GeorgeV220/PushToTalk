@@ -45,6 +45,8 @@ private:
 
     static void playback_process(void *userdata);
 
+    static void playback_param_changed(void *userdata, uint32_t id, const struct spa_pod *param);
+
     static void capture_param_changed(void *userdata, uint32_t id, const struct spa_pod *param);
 
     static void capture_state_changed(void *userdata, pw_stream_state old, pw_stream_state state, const char *error);
@@ -55,7 +57,7 @@ private:
     pw_stream *capture_stream_;
     pw_stream *playback_stream_;
 
-    spa_audio_info format_;
+    spa_audio_info format_{};
 
     float *buffer_;
     uint32_t buffer_frames_;
