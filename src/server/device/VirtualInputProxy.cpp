@@ -56,8 +56,8 @@ void VirtualInputProxy::add_device(const DeviceConfig &config) {
         add_failed_config(config);
 
         Utility::error(
-            "Failed to find input device: " + std::to_string(vendor_id) + ":" + std::to_string(product_id) + ":" +
-            std::to_string(uid)
+                "Failed to find input device: " + std::to_string(vendor_id) + ":" + std::to_string(product_id) + ":" +
+                std::to_string(uid)
         );
         return;
     }
@@ -300,7 +300,8 @@ bool VirtualInputProxy::setup_capabilities(const int physical_fd, const int ufd)
             if (ioctl(ufd, UI_SET_EVBIT, ev) < 0) {
                 close(ufd);
                 throw std::runtime_error(
-                    "UI_SET_EVBIT failed for event type " + std::to_string(ev) + ": " + std::string(strerror(errno)));
+                        "UI_SET_EVBIT failed for event type " + std::to_string(ev) + ": " +
+                        std::string(strerror(errno)));
             }
             if (ev == EV_FF) {
                 has_ff = true;
@@ -318,7 +319,8 @@ void VirtualInputProxy::setup_event_codes(const int physical_fd, const int ufd, 
 
     if (ioctl(physical_fd, EVIOCGBIT(ev_type, sizeof(codes)), codes) < 0) {
         throw std::runtime_error(
-            "Failed to get event codes for ev_type " + std::to_string(ev_type) + ": " + std::string(strerror(errno)));
+                "Failed to get event codes for ev_type " + std::to_string(ev_type) + ": " +
+                std::string(strerror(errno)));
     }
 
     for (int code = 0; code < max_code; ++code) {
@@ -330,12 +332,18 @@ void VirtualInputProxy::setup_event_codes(const int physical_fd, const int ufd, 
 
 int VirtualInputProxy::get_max_code(const int ev_type) {
     switch (ev_type) {
-        case EV_KEY: return KEY_MAX;
-        case EV_REL: return REL_MAX;
-        case EV_ABS: return ABS_MAX;
-        case EV_MSC: return MSC_MAX;
-        case EV_LED: return LED_MAX;
-        default: return 0;
+        case EV_KEY:
+            return KEY_MAX;
+        case EV_REL:
+            return REL_MAX;
+        case EV_ABS:
+            return ABS_MAX;
+        case EV_MSC:
+            return MSC_MAX;
+        case EV_LED:
+            return LED_MAX;
+        default:
+            return 0;
     }
 }
 
@@ -432,7 +440,7 @@ void VirtualInputProxy::detect_devices() {
             if (FD_ISSET(fds[i], &set)) {
                 input_event ev{};
                 while (Utility::safe_read(fds[i], &ev, sizeof(ev)) == sizeof(ev)) {
-                    if (ev.type == EV_KEY && ev.value == 1) {
+                    if (ev.type == EV_KEY || ev.type == EV_ABS && ev.value == 1) {
                         DeviceCapabilities caps = get_device_capabilities(fds[i]);
                         uint16_t vendor = 0, product = 0;
 
@@ -445,12 +453,12 @@ void VirtualInputProxy::detect_devices() {
                         }
                         std::ostringstream oss;
                         oss << "Key pressed: 0x" << std::hex << ev.code << "\n"
-                                << "Device: " << device_paths[i] << "\n"
-                                << "Vendor: 0x" << std::setw(4) << std::setfill('0') << vendor << "\n"
-                                << "Product: 0x" << std::setw(4) << std::setfill('0') << product << "\n"
-                                << "UID: 0x" << std::setw(8) << std::setfill('0') << DeviceUtils::generate_uid(caps) <<
-                                "\n"
-                                << "Name: " << caps.name << "\n\n";
+                            << "Device: " << device_paths[i] << "\n"
+                            << "Vendor: 0x" << std::setw(4) << std::setfill('0') << vendor << "\n"
+                            << "Product: 0x" << std::setw(4) << std::setfill('0') << product << "\n"
+                            << "UID: 0x" << std::setw(8) << std::setfill('0') << DeviceUtils::generate_uid(caps) <<
+                            "\n"
+                            << "Name: " << caps.name << "\n";
                         Utility::print(oss.str());
 
                         std::ostringstream hex_oss;
@@ -473,7 +481,7 @@ void VirtualInputProxy::detect_devices() {
                                 .append(product_str)
                                 .append(":")
                                 .append(uid_str);
-                        Utility::print("Device to use in the config: " + device);
+                        Utility::print("Device to use in the config: " + device + "\n\n");
                     }
                 }
             }
