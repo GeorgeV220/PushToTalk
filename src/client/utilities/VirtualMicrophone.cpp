@@ -215,16 +215,14 @@ void VirtualMicrophone::set_playback_buffer_size(uint32_t buffer_size) {
 }
 
 void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {
-    if (!is_playback_active() || !buffer_ || channels_ == 0) {
-        return;
-    }
+    if (!is_playback_active() || !buffer_ || channels_ == 0) return;
+
     uint32_t free_space = buffer_frames_ - frames_available_;
     if (n_frames > free_space) {
-        Utility::error(
-                "Buffer overrun: Requested " + std::to_string(n_frames) + ", only got " + std::to_string(free_space));
-        Utility::error("Dropping " + std::to_string(n_frames - free_space) + " frames");
-        read_pos_ = (read_pos_ + (n_frames - free_space)) % buffer_frames_;
-        frames_available_ -= (n_frames - free_space);
+        uint32_t drop = n_frames - free_space;
+        read_pos_ = (read_pos_ + drop) % buffer_frames_;
+        frames_available_ -= drop;
+        Utility::error("Buffer overrun: Dropping " + std::to_string(drop) + " frames");
     }
 
     for (uint32_t i = 0; i < n_frames; ++i) {
@@ -233,34 +231,43 @@ void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {
             buffer_[pos * channels_ + c] = src[i * channels_ + c];
         }
     }
+
     write_pos_ = (write_pos_ + n_frames) % buffer_frames_;
     frames_available_ += n_frames;
 }
 
 void VirtualMicrophone::buffer_read(float *dst, uint32_t n_frames) {
-    if (!is_capture_active() || !buffer_ || channels_ == 0) {
-        return;
-    }
-    uint32_t frames_to_read = std::min(n_frames, frames_available_);
+    if (!is_capture_active() || !buffer_ || channels_ == 0) return;
 
-    if (frames_to_read < n_frames) {
-        Utility::error(
-                "Buffer underrun: Requested " + std::to_string(n_frames) + ", only got " +
-                std::to_string(frames_to_read));
-    }
+    uint32_t available = frames_available_;
+    uint32_t frames_to_read = std::min(n_frames, available);
 
     for (uint32_t i = 0; i < frames_to_read; ++i) {
-        uint32_t pos = (read_pos_ + i) % buffer_frames_;
+        uint32_t pos = read_pos_;
         for (uint32_t c = 0; c < channels_; ++c) {
             dst[i * channels_ + c] = buffer_[pos * channels_ + c];
         }
+        if (++read_pos_ >= buffer_frames_) read_pos_ = 0;
     }
 
     if (frames_to_read < n_frames) {
-        std::memset(&dst[frames_to_read * channels_], 0, (n_frames - frames_to_read) * channels_ * sizeof(float));
+        if (frames_to_read > 0) {
+            const float *last_frame = &dst[(frames_to_read - 1) * channels_];
+            for (uint32_t i = 0; i < n_frames - frames_to_read; ++i) {
+                float fade_factor = 1.0f - float(i + 1) / float(n_frames - frames_to_read + 1);
+                for (uint32_t c = 0; c < channels_; ++c) {
+                    dst[(frames_to_read + i) * channels_ + c] = last_frame[c] * fade_factor;
+                }
+            }
+        } else {
+            std::memset(&dst[frames_to_read * channels_], 0,
+                        (n_frames - frames_to_read) * channels_ * sizeof(float));
+        }
+
+        Utility::error("Buffer underrun: Requested " + std::to_string(n_frames) +
+                       ", only got " + std::to_string(frames_to_read));
     }
 
-    read_pos_ = (read_pos_ + frames_to_read) % buffer_frames_;
     frames_available_ -= frames_to_read;
 }
 
