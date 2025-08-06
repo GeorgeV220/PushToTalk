@@ -215,6 +215,9 @@ void VirtualMicrophone::set_playback_buffer_size(uint32_t buffer_size) {
 }
 
 void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {
+    if (!is_playback_active()) {
+        return;
+    }
     uint32_t free_space = buffer_frames_ - frames_available_;
     if (n_frames > free_space) {
         Utility::error(
@@ -235,6 +238,9 @@ void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {
 }
 
 void VirtualMicrophone::buffer_read(float *dst, uint32_t n_frames) {
+    if (!is_capture_active()) {
+        return;
+    }
     uint32_t frames_to_read = std::min(n_frames, frames_available_);
 
     if (frames_to_read < n_frames) {
@@ -304,9 +310,23 @@ void VirtualMicrophone::on_capture_param_changed(uint32_t id, const spa_pod *par
     if (spa_format_parse(param, &format_.media_type, &format_.media_subtype) < 0) return;
     if (format_.media_type != SPA_MEDIA_TYPE_audio || format_.media_subtype != SPA_MEDIA_SUBTYPE_raw) return;
 
-    spa_format_audio_raw_parse(param, &format_.info.raw);
-    Utility::print("Capture format: rate=" + std::to_string(format_.info.raw.rate)
-                   + " channels=" + std::to_string(format_.info.raw.channels));
+    spa_audio_info_raw new_info{};
+    spa_format_audio_raw_parse(param, &new_info);
+
+    Utility::print("Capture format: rate=" + std::to_string(new_info.rate)
+                   + " channels=" + std::to_string(new_info.channels));
+
+    if (new_info.rate != rate_ || new_info.channels != channels_) {
+        rate_ = new_info.rate;
+        channels_ = new_info.channels;
+
+        delete[] buffer_;
+        buffer_ = new float[buffer_frames_ * channels_]();
+
+        write_pos_ = 0;
+        read_pos_ = 0;
+        frames_available_ = 0;
+    }
 }
 
 void VirtualMicrophone::on_capture_state_changed(pw_stream_state old, pw_stream_state state, const char *error) {
@@ -314,7 +334,7 @@ void VirtualMicrophone::on_capture_state_changed(pw_stream_state old, pw_stream_
     if (error) {
         Utility::error("Error: " + std::string(error));
     }
-    if (state == PW_STREAM_STATE_PAUSED || state == PW_STREAM_STATE_UNCONNECTED) {
+    if (state != PW_STREAM_STATE_STREAMING) {
         write_pos_ = 0;
         read_pos_ = 0;
         frames_available_ = 0;
@@ -348,4 +368,16 @@ void VirtualMicrophone::capture_state_changed(void *userdata, pw_stream_state ol
 
 void VirtualMicrophone::do_quit(void *userdata, int signal_number) {
     static_cast<VirtualMicrophone *>(userdata)->stop();
+}
+
+bool VirtualMicrophone::is_capture_active() const {
+    if (!capture_stream_) return false;
+    pw_stream_state state = pw_stream_get_state(capture_stream_, nullptr);
+    return state == PW_STREAM_STATE_STREAMING;
+}
+
+bool VirtualMicrophone::is_playback_active() const {
+    if (!playback_stream_) return false;
+    pw_stream_state state = pw_stream_get_state(playback_stream_, nullptr);
+    return state == PW_STREAM_STATE_STREAMING;
 }
