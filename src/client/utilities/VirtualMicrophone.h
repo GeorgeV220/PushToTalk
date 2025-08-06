@@ -86,9 +86,9 @@ private:
     static const pw_stream_events capture_events;
     static const pw_stream_events playback_events;
 
-    bool is_capture_active() const;
+    [[nodiscard]] bool is_capture_active() const;
 
-    bool is_playback_active() const;
+    [[nodiscard]] bool is_playback_active() const;
 };
 
 #endif //PUSHTOTALK_VIRTUALMICROPHONE_H
