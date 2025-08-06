@@ -215,7 +215,7 @@ void VirtualMicrophone::set_playback_buffer_size(uint32_t buffer_size) {
 }
 
 void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {
-    if (!is_playback_active()) {
+    if (!is_playback_active() || !buffer_ || channels_ == 0) {
         return;
     }
     uint32_t free_space = buffer_frames_ - frames_available_;
@@ -238,7 +238,7 @@ void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {
 }
 
 void VirtualMicrophone::buffer_read(float *dst, uint32_t n_frames) {
-    if (!is_capture_active()) {
+    if (!is_capture_active() || !buffer_ || channels_ == 0) {
         return;
     }
     uint32_t frames_to_read = std::min(n_frames, frames_available_);
@@ -257,7 +257,16 @@ void VirtualMicrophone::buffer_read(float *dst, uint32_t n_frames) {
     }
 
     if (frames_to_read < n_frames) {
-        std::memset(&dst[frames_to_read * channels_], 0, (n_frames - frames_to_read) * channels_ * sizeof(float));
+        if (frames_to_read > 0) {
+            const float *last_frame = &dst[(frames_to_read - 1) * channels_];
+            for (uint32_t i = frames_to_read; i < n_frames; ++i) {
+                for (uint32_t c = 0; c < channels_; ++c) {
+                    dst[i * channels_ + c] = last_frame[c];
+                }
+            }
+        } else {
+            std::memset(dst, 0, n_frames * channels_ * sizeof(float));
+        }
     }
 
     read_pos_ = (read_pos_ + frames_to_read) % buffer_frames_;
