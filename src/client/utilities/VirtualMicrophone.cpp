@@ -107,7 +107,7 @@ void VirtualMicrophone::create_streams() {
                       capture_params, 1);
     pw_stream_set_active(capture_stream_, true);
 
-    std::vector<uint8_t> playback_buffer(capture_buffer_size_);
+    std::vector<uint8_t> playback_buffer(playback_buffer_size_);
     if (playback_buffer.size() > std::numeric_limits<uint32_t>::max()) {
         throw std::runtime_error("playback_buffer size exceeds uint32_t limit");
     }
