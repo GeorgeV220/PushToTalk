@@ -28,6 +28,8 @@ VirtualMicrophone::VirtualMicrophone()
           frames_available_(0),
           rate_(0),
           channels_(0),
+          capture_buffer_size_(1024),
+          playback_buffer_size_(2048),
           running_(false) {}
 
 VirtualMicrophone::~VirtualMicrophone() {
@@ -78,8 +80,12 @@ void VirtualMicrophone::create_streams() {
             this
     );
 
-    uint8_t capture_buffer[1024];
-    spa_pod_builder capture_builder = SPA_POD_BUILDER_INIT(capture_buffer, sizeof(capture_buffer));
+    std::vector<uint8_t> capture_buffer(capture_buffer_size_);
+    if (capture_buffer.size() > std::numeric_limits<uint32_t>::max()) {
+        throw std::runtime_error("capture_buffer size exceeds uint32_t limit");
+    }
+    spa_pod_builder capture_builder = SPA_POD_BUILDER_INIT(
+            capture_buffer.data(), static_cast<uint32_t>(capture_buffer.size()));
 
     spa_audio_info_raw capture_info = SPA_AUDIO_INFO_RAW_INIT(
             .format = SPA_AUDIO_FORMAT_F32,
@@ -101,8 +107,12 @@ void VirtualMicrophone::create_streams() {
                       capture_params, 1);
     pw_stream_set_active(capture_stream_, true);
 
-    uint8_t playback_buffer[1024];
-    spa_pod_builder playback_builder = SPA_POD_BUILDER_INIT(playback_buffer, sizeof(playback_buffer));
+    std::vector<uint8_t> playback_buffer(capture_buffer_size_);
+    if (playback_buffer.size() > std::numeric_limits<uint32_t>::max()) {
+        throw std::runtime_error("playback_buffer size exceeds uint32_t limit");
+    }
+    spa_pod_builder playback_builder = SPA_POD_BUILDER_INIT(
+            playback_buffer.data(), static_cast<uint32_t>(playback_buffer.size()));
 
     spa_audio_info_raw playback_info = SPA_AUDIO_INFO_RAW_INIT(
             .format = SPA_AUDIO_FORMAT_F32,
@@ -193,6 +203,15 @@ void VirtualMicrophone::set_audio_config(uint32_t rate, uint32_t channels, uint3
     rate_ = rate;
     channels_ = channels;
     buffer_frames_ = buffer_frames;
+}
+
+
+void VirtualMicrophone::set_capture_buffer_size(uint32_t buffer_size) {
+    capture_buffer_size_ = buffer_size;
+}
+
+void VirtualMicrophone::set_playback_buffer_size(uint32_t buffer_size) {
+    playback_buffer_size_ = buffer_size;
 }
 
 void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {

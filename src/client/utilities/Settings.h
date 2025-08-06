@@ -39,6 +39,8 @@ public:
     int rate;
     int channels;
     int buffer_frames;
+    int capture_buffer_size;
+    int playback_buffer_size;
 
     void saveSettings();
 

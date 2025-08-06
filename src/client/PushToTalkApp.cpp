@@ -99,6 +99,8 @@ void PushToTalkApp::run() {
     try {
         virtualMicrophone_.set_audio_config(Settings::settings.rate, Settings::settings.channels,
                                             Settings::settings.buffer_frames);
+        virtualMicrophone_.set_capture_buffer_size(Settings::settings.capture_buffer_size);
+        virtualMicrophone_.set_playback_buffer_size(Settings::settings.playback_buffer_size);
         virtualMicrophone_.set_capture_target("");
         virtualMicrophone_.set_playback_name("ptt_virtual_mic");
         virtualMicrophone_.set_microphone_name("PTT Virtual Microphone");

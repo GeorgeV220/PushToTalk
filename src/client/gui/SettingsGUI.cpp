@@ -75,6 +75,10 @@ gboolean onSaveSettings(gpointer) {
             GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "channels")));
     const char *bufferFramesStr = gtk_entry_get_text(
             GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "bufferFrames")));
+    const char *captureBufferSizeStr = gtk_entry_get_text(
+            GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "captureBufferSize")));
+    const char *playbackBufferSizeStr = gtk_entry_get_text(
+            GTK_ENTRY(g_object_get_data(G_OBJECT(SettingsGUI::settingsWindow), "playbackBufferSize")));
 
     float volume;
     try {
@@ -125,6 +129,32 @@ gboolean onSaveSettings(gpointer) {
         return G_SOURCE_REMOVE;
     }
 
+    int capture_buffer_size;
+    try {
+        const IntConversionResult captureBufferSizeRes = safeStrToInt(captureBufferSizeStr);
+        if (!captureBufferSizeRes.success) {
+            Utility::error("Invalid capture buffer size value.");
+            return G_SOURCE_REMOVE;
+        }
+        capture_buffer_size = captureBufferSizeRes.value;
+    } catch (...) {
+        Utility::error("Invalid capture buffer size value.");
+        return G_SOURCE_REMOVE;
+    }
+
+    int playback_buffer_size;
+    try {
+        const IntConversionResult playbackBufferSizeRes = safeStrToInt(playbackBufferSizeStr);
+        if (!playbackBufferSizeRes.success) {
+            Utility::error("Invalid playback buffer size value.");
+            return G_SOURCE_REMOVE;
+        }
+        playback_buffer_size = playbackBufferSizeRes.value;
+    } catch (...) {
+        Utility::error("Invalid playback buffer size value.");
+        return G_SOURCE_REMOVE;
+    }
+
     Settings::settings.devices = std::move(devices);
     Settings::settings.sPttOnPath = onPath;
     Settings::settings.sPttOffPath = offPath;
@@ -132,6 +162,8 @@ gboolean onSaveSettings(gpointer) {
     Settings::settings.rate = rate;
     Settings::settings.channels = channels;
     Settings::settings.buffer_frames = buffer_frames;
+    Settings::settings.capture_buffer_size = capture_buffer_size;
+    Settings::settings.playback_buffer_size = playback_buffer_size;
     Settings::settings.saveSettings();
 
     InputClient &client = PushToTalkApp::getInstance().getClient();
@@ -144,6 +176,8 @@ gboolean onSaveSettings(gpointer) {
 
     VirtualMicrophone &microphone = PushToTalkApp::getInstance().getVirtualMicrophone();
     microphone.set_audio_config(rate, channels, buffer_frames);
+    microphone.set_capture_buffer_size(capture_buffer_size);
+    microphone.set_playback_buffer_size(playback_buffer_size);
     microphone.restart();
 
     gtk_widget_hide(SettingsGUI::settingsWindow);
@@ -220,6 +254,16 @@ void SettingsGUI::showSettingsGui() {
     gtk_entry_set_text(GTK_ENTRY(bufferFramesEntry), std::to_string(Settings::settings.buffer_frames).c_str());
     g_object_set_data(G_OBJECT(settingsWindow), "bufferFrames", bufferFramesEntry);
 
+    GtkWidget *captureBufferSizeEntry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(captureBufferSizeEntry),
+                       std::to_string(Settings::settings.capture_buffer_size).c_str());
+    g_object_set_data(G_OBJECT(settingsWindow), "captureBufferSize", captureBufferSizeEntry);
+
+    GtkWidget *playbackBufferSizeEntry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(playbackBufferSizeEntry),
+                       std::to_string(Settings::settings.playback_buffer_size).c_str());
+    g_object_set_data(G_OBJECT(settingsWindow), "playbackBufferSize", playbackBufferSizeEntry);
+
     gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("PTT On Path:"), FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(mainBox), pttOn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("PTT Off Path:"), FALSE, FALSE, 0);
@@ -235,6 +279,12 @@ void SettingsGUI::showSettingsGui() {
 
     gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("Buffer Frames:"), FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(mainBox), bufferFramesEntry, FALSE, FALSE, 0);
+
+    gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("Capture Buffer Size:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), captureBufferSizeEntry, FALSE, FALSE, 0);
+
+    gtk_box_pack_start(GTK_BOX(mainBox), gtk_label_new("Playback Buffer Size:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(mainBox), playbackBufferSizeEntry, FALSE, FALSE, 0);
 
     GtkWidget *saveBtn = gtk_button_new_with_label("Save & Close");
     gtk_box_pack_start(GTK_BOX(mainBox), saveBtn, FALSE, FALSE, 0);

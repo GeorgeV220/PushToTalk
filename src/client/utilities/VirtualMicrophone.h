@@ -24,6 +24,8 @@ public:
     void set_playback_name(std::string name);
     void set_microphone_name(std::string name);
     void set_audio_config(uint32_t rate, uint32_t channels, uint32_t buffer_frames);
+    void set_capture_buffer_size(uint32_t buffer_size);
+    void set_playback_buffer_size(uint32_t buffer_size);
 
 
 private:
@@ -76,6 +78,8 @@ private:
     std::string microphone_name_;
     uint32_t rate_;
     uint32_t channels_;
+    uint32_t capture_buffer_size_;
+    uint32_t playback_buffer_size_;
     std::thread listener_thread_;
     std::atomic<bool> running_{false};
 

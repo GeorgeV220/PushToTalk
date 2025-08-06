@@ -13,12 +13,16 @@
 #define DEFAULT_RATE 44100
 #define DEFAULT_CHANNELS 1
 #define DEFAULT_BUFFER_FRAMES 16384
+#define DEFAULT_CAPTURE_BUFFER_SIZE 1024
+#define DEFAULT_PLAYBACK_BUFFER_SIZE 2048
 
 Settings Settings::settings;
 
 Settings::Settings() : sPttOnPath(DEFAULT_PATH), sPttOffPath(DEFAULT_PATH_OFF), sVolume(DEFAULT_VOLUME),
                        rate(DEFAULT_RATE),
-                       channels(DEFAULT_CHANNELS), buffer_frames(DEFAULT_BUFFER_FRAMES) {
+                       channels(DEFAULT_CHANNELS), buffer_frames(DEFAULT_BUFFER_FRAMES),
+                       capture_buffer_size(DEFAULT_CAPTURE_BUFFER_SIZE),
+                       playback_buffer_size(DEFAULT_PLAYBACK_BUFFER_SIZE) {
     const char *homeDir = getenv("HOME");
     if (!homeDir) {
         Utility::error("Unable to determine the home directory");
@@ -52,6 +56,8 @@ void Settings::saveSettings() {
     file << "rate = " << rate << "\n";
     file << "channels = " << channels << "\n";
     file << "buffer_frames = " << buffer_frames << "\n";
+    file << "capture_buffer_size = " << capture_buffer_size << "\n";
+    file << "playback_buffer_size = " << playback_buffer_size << "\n";
     file.close();
 }
 
@@ -104,6 +110,16 @@ void Settings::loadSettings() {
             auto result = safeStrToInt(value);
             if (result.success) {
                 buffer_frames = result.value;
+            }
+        } else if (key == "capture_buffer_size") {
+            auto result = safeStrToInt(value);
+            if (result.success) {
+                capture_buffer_size = result.value;
+            }
+        } else if (key == "playback_buffer_size") {
+            auto result = safeStrToInt(value);
+            if (result.success) {
+                playback_buffer_size = result.value;
             }
         }
     }
