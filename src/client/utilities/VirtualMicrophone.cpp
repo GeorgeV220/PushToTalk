@@ -257,16 +257,7 @@ void VirtualMicrophone::buffer_read(float *dst, uint32_t n_frames) {
     }
 
     if (frames_to_read < n_frames) {
-        if (frames_to_read > 0) {
-            const float *last_frame = &dst[(frames_to_read - 1) * channels_];
-            for (uint32_t i = frames_to_read; i < n_frames; ++i) {
-                for (uint32_t c = 0; c < channels_; ++c) {
-                    dst[i * channels_ + c] = last_frame[c];
-                }
-            }
-        } else {
-            std::memset(dst, 0, n_frames * channels_ * sizeof(float));
-        }
+        std::memset(&dst[frames_to_read * channels_], 0, (n_frames - frames_to_read) * channels_ * sizeof(float));
     }
 
     read_pos_ = (read_pos_ + frames_to_read) % buffer_frames_;
