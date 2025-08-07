@@ -5,13 +5,20 @@
 #include <cstdint>
 #include <string>
 #include <linux/input-event-codes.h>
+#include <bitset>
+#include <linux/input.h>
+#include <unordered_map>
 
 struct DeviceCapabilities {
-    uint32_t num_keys = 0;
-    uint32_t abs_mask = 0;
-    uint32_t rel_mask = 0;
     std::string name;
-    std::bitset<KEY_MAX> key_bits;
+
+    std::bitset<KEY_MAX + 1> key_bits;
+    std::bitset<ABS_MAX + 1> abs_bits;
+    std::bitset<REL_MAX + 1> rel_bits;
+
+    std::unordered_map<int, input_absinfo> abs_info;
+
+    int num_keys = 0;
 };
 
 namespace DeviceUtils {

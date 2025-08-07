@@ -18,6 +18,9 @@
 
 using namespace DeviceUtils;
 
+static uint16_t vendor_counter = 0;
+static uint16_t product_counter = 0;
+
 void VirtualInputProxy::add_failed_config(const DeviceConfig &config) {
     const auto already_failed = std::ranges::any_of(failed_configs,
                                                     [&](const DeviceConfig &dc) {
@@ -261,9 +264,11 @@ int VirtualInputProxy::create_virtual_device(const int physical_fd) {
     const std::string dev_name = "PTT Virtual Device " + std::to_string(ufd);
     strncpy(uidev.name, dev_name.c_str(), UINPUT_MAX_NAME_SIZE - 1);
     uidev.name[UINPUT_MAX_NAME_SIZE - 1] = '\0';
-    uidev.id.bustype = BUS_VIRTUAL;
-    uidev.id.vendor = 0x1234;
-    uidev.id.product = 0x5678;
+
+    uidev.id.bustype = BUS_USB;
+
+    uidev.id.vendor = 0x1234 + (vendor_counter++);
+    uidev.id.product = 0x5678 + (product_counter++);
     uidev.id.version = 1;
 
     if (has_ff) {
@@ -290,6 +295,7 @@ bool VirtualInputProxy::setup_capabilities(const int physical_fd, const int ufd)
     unsigned long evtypes[EV_MAX / (sizeof(long) * 8) + 1] = {0};
     if (ioctl(physical_fd, EVIOCGBIT(0, sizeof(evtypes)), evtypes) < 0) {
         close(ufd);
+        Utility::error("Failed to get event types from physical_fd: " + std::string(strerror(errno)));
         throw std::runtime_error("Failed to get event types: " + std::string(strerror(errno)));
     }
 
@@ -297,8 +303,11 @@ bool VirtualInputProxy::setup_capabilities(const int physical_fd, const int ufd)
 
     for (int ev = 0; ev < EV_MAX; ++ev) {
         if (test_bit(ev, evtypes)) {
+            Utility::debugPrint("Setting event type: " + std::to_string(ev) + "\n");
             if (ioctl(ufd, UI_SET_EVBIT, ev) < 0) {
                 close(ufd);
+                Utility::error("UI_SET_EVBIT failed for event type " + std::to_string(ev) + ": " +
+                               std::string(strerror(errno)));
                 throw std::runtime_error(
                         "UI_SET_EVBIT failed for event type " + std::to_string(ev) + ": " +
                         std::string(strerror(errno)));
@@ -356,17 +365,31 @@ void VirtualInputProxy::set_virtual_bit(const int ufd, const int ev_type, const 
             ioctl(ufd, UI_SET_RELBIT, code);
             break;
         case EV_ABS: {
-            ioctl(ufd, UI_SET_ABSBIT, code);
+            if (ioctl(ufd, UI_SET_ABSBIT, code) < 0) {
+                Utility::error("Failed to set ABS bit for code: " + std::to_string(code));
+                break;
+            }
 
             input_absinfo absinfo{};
             if (ioctl(physical_fd, EVIOCGABS(code), &absinfo) == 0) {
                 struct uinput_abs_setup abs = {};
                 abs.code = code;
                 abs.absinfo = absinfo;
-                ioctl(ufd, UI_ABS_SETUP, &abs);
+
+                Utility::error("ABS[" + std::to_string(code) + "] - min: " + std::to_string(absinfo.minimum) +
+                               ", max: " + std::to_string(absinfo.maximum) +
+                               ", flat: " + std::to_string(absinfo.flat) +
+                               ", fuzz: " + std::to_string(absinfo.fuzz) +
+                               ", resolution: " + std::to_string(absinfo.resolution));
+
+                if (ioctl(ufd, UI_ABS_SETUP, &abs) < 0) {
+                    Utility::error("Failed UI_ABS_SETUP for ABS[" + std::to_string(code) + "]: " +
+                                   std::string(strerror(errno)));
+                }
             } else {
-                /* If the physical device doesn't support this event, we
-                 * can try to set a default value for it. */
+                Utility::error("Failed fallback EVIOCGABS for ABS[" + std::to_string(code) + "]: " +
+                               std::string(strerror(errno)));
+
                 uinput_abs_setup abs = {};
                 abs.code = code;
                 abs.absinfo.minimum = 0;
@@ -374,7 +397,11 @@ void VirtualInputProxy::set_virtual_bit(const int ufd, const int ev_type, const 
                 abs.absinfo.flat = 0;
                 abs.absinfo.fuzz = 0;
                 abs.absinfo.resolution = 0;
-                ioctl(ufd, UI_ABS_SETUP, &abs);
+
+                if (ioctl(ufd, UI_ABS_SETUP, &abs) < 0) {
+                    Utility::error("Failed fallback UI_ABS_SETUP for ABS[" + std::to_string(code) + "]: " +
+                                   std::string(strerror(errno)));
+                }
             }
             break;
         }
