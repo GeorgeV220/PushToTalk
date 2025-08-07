@@ -54,6 +54,16 @@ void PushToTalkApp::createTrayIcon() {
     g_signal_connect(showGuiItem, "activate", G_CALLBACK(onShowSettings), nullptr);
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), showGuiItem);
 
+    GtkWidget *reload = gtk_menu_item_new_with_label("Reload Client");
+    g_signal_connect(reload, "activate", G_CALLBACK([]() {
+        auto &ptt_app = PushToTalkApp::getInstance();
+        ptt_app.reload();
+    }), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), reload);
+
+    GtkWidget *separator = gtk_separator_menu_item_new();
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), separator);
+
     GtkWidget *exitItem = gtk_menu_item_new_with_label("Exit");
     g_signal_connect(exitItem, "activate", G_CALLBACK(onExit), this);
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), exitItem);
@@ -121,4 +131,18 @@ void PushToTalkApp::run() {
 void PushToTalkApp::stop() {
     client_.stop();
     virtualMicrophone_.stop();
+}
+
+void PushToTalkApp::reload() {
+    Utility::print("Reloading client...");
+    client_.clear_devices();
+    for (const auto &dev: Settings::settings.devices)
+        client_.add_device(dev.getVendorID(), dev.getProductID(), dev.getDeviceUID(), dev.button);
+    client_.restart();
+
+    virtualMicrophone_.set_audio_config(Settings::settings.rate, Settings::settings.channels,
+                                        Settings::settings.buffer_frames);
+    virtualMicrophone_.set_capture_buffer_size(Settings::settings.capture_buffer_size);
+    virtualMicrophone_.set_playback_buffer_size(Settings::settings.playback_buffer_size);
+    virtualMicrophone_.restart();
 }

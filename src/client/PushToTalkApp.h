@@ -19,6 +19,8 @@ public:
 
     VirtualMicrophone &getVirtualMicrophone() { return virtualMicrophone_; }
 
+    void reload();
+
     static PushToTalkApp &getInstance(int argc = 0, char *argv[] = nullptr);
 
 private:
