@@ -143,6 +143,13 @@ void VirtualMicrophone::start() {
         throw std::runtime_error("VirtualMicrophone already running");
     }
     running_ = true;
+//    flush_running_ = true; // Currently disabled
+//    auto_flusher_ = std::thread([this]() {
+//        while (flush_running_) {
+//            std::this_thread::sleep_for(std::chrono::seconds(10));
+//            if (flush_running_) this->flush_buffer();
+//        }
+//    });
     listener_thread_ = std::thread([this]() {
         initialize_pipewire();
         create_streams();
@@ -156,6 +163,11 @@ void VirtualMicrophone::start() {
 void VirtualMicrophone::stop() {
     if (!running_) return;
     running_ = false;
+
+//    flush_running_ = false;
+//    if (auto_flusher_.joinable()) {
+//        auto_flusher_.join();
+//    }
 
     if (loop_) {
         pw_main_loop_quit(loop_);
@@ -217,12 +229,28 @@ void VirtualMicrophone::set_playback_buffer_size(uint32_t buffer_size) {
 void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {
     if (!is_playback_active() || !buffer_ || channels_ == 0) return;
 
+    std::lock_guard<std::mutex> lock(buffer_mutex_);
+
+    static int overrun_counter = 0;
+
     uint32_t free_space = buffer_frames_ - frames_available_;
     if (n_frames > free_space) {
+        overrun_counter++;
+        if (overrun_counter >= 5) {
+            Utility::print("Too many overruns — flushing buffer");
+            flush_buffer();
+            overrun_counter = 0;
+        }
         uint32_t drop = n_frames - free_space;
         read_pos_ = (read_pos_ + drop) % buffer_frames_;
         frames_available_ -= drop;
-        Utility::error("Buffer overrun: Dropping " + std::to_string(drop) + " frames");
+
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_flush_time_).count() > 100) {
+            Utility::error("Buffer overrun: Dropping " + std::to_string(drop) + " frames");
+        }
+    } else {
+        overrun_counter = 0;
     }
 
     for (uint32_t i = 0; i < n_frames; ++i) {
@@ -239,6 +267,10 @@ void VirtualMicrophone::buffer_write(const float *src, uint32_t n_frames) {
 void VirtualMicrophone::buffer_read(float *dst, uint32_t n_frames) {
     if (!is_capture_active() || !buffer_ || channels_ == 0) return;
 
+    std::lock_guard<std::mutex> lock(buffer_mutex_);
+
+    static int underrun_counter = 0;
+
     uint32_t available = frames_available_;
     uint32_t frames_to_read = std::min(n_frames, available);
 
@@ -251,6 +283,13 @@ void VirtualMicrophone::buffer_read(float *dst, uint32_t n_frames) {
     }
 
     if (frames_to_read < n_frames) {
+        underrun_counter++;
+        if (underrun_counter >= 5) {
+            Utility::print("Too many underruns — flushing buffer");
+            flush_buffer();
+            underrun_counter = 0;
+        }
+
         if (frames_to_read > 0) {
             const float *last_frame = &dst[(frames_to_read - 1) * channels_];
             for (uint32_t i = 0; i < n_frames - frames_to_read; ++i) {
@@ -264,8 +303,13 @@ void VirtualMicrophone::buffer_read(float *dst, uint32_t n_frames) {
                         (n_frames - frames_to_read) * channels_ * sizeof(float));
         }
 
-        Utility::error("Buffer underrun: Requested " + std::to_string(n_frames) +
-                       ", only got " + std::to_string(frames_to_read));
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_flush_time_).count() > 100) {
+            Utility::error("Buffer underrun: Requested " + std::to_string(n_frames) +
+                           ", only got " + std::to_string(frames_to_read));
+        }
+    } else {
+        underrun_counter = 0;
     }
 
     frames_available_ -= frames_to_read;
@@ -375,6 +419,19 @@ void VirtualMicrophone::capture_state_changed(void *userdata, pw_stream_state ol
 
 void VirtualMicrophone::do_quit(void *userdata, int signal_number) {
     static_cast<VirtualMicrophone *>(userdata)->stop();
+}
+
+void VirtualMicrophone::flush_buffer() {
+    std::lock_guard<std::mutex> lock(buffer_mutex_);
+    write_pos_ = 0;
+    read_pos_ = 0;
+    frames_available_ = 0;
+    if (buffer_) {
+        std::memset(buffer_, 0, buffer_frames_ * channels_ * sizeof(float));
+    }
+
+    last_flush_time_ = std::chrono::steady_clock::now();
+    Utility::debugPrint("Audio buffer flushed");
 }
 
 bool VirtualMicrophone::is_capture_active() const {

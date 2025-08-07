@@ -61,6 +61,8 @@ private:
 
     static void do_quit(void *userdata, int signal_number);
 
+    void flush_buffer();
+
     pw_main_loop *loop_;
     pw_stream *capture_stream_;
     pw_stream *playback_stream_;
@@ -82,6 +84,10 @@ private:
     uint32_t playback_buffer_size_;
     std::thread listener_thread_;
     std::atomic<bool> running_{false};
+    std::mutex buffer_mutex_;
+    std::thread auto_flusher_;
+    std::atomic<bool> flush_running_;
+    std::chrono::steady_clock::time_point last_flush_time_;
 
     static const pw_stream_events capture_events;
     static const pw_stream_events playback_events;
