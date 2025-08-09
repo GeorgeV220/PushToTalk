@@ -26,8 +26,8 @@ void InputClient::clear_devices() {
 }
 
 void InputClient::add_device(const uint16_t vendor_id, const uint16_t product_id, const uint32_t uid,
-                             const int target_key) {
-    const DeviceConfig config = {vendor_id, product_id, uid, target_key};
+                             const int target_key, const bool exclusive) {
+    const DeviceConfig config = {vendor_id, product_id, uid, target_key, exclusive};
     configs_.push_back(config);
 }
 
@@ -65,12 +65,13 @@ void InputClient::start() {
     InitParams params;
     params.configs = configs_;
 
-    for (const auto &[vendor_id, product_id, uid, target_key]: configs_) {
+    for (const auto &[vendor_id, product_id, uid, target_key, exclusive]: configs_) {
         Utility::debugPrint("Config:");
         Utility::debugPrint("vendor_id: " + std::to_string(vendor_id));
         Utility::debugPrint("product_id: " + std::to_string(product_id));
         Utility::debugPrint("uid: " + std::to_string(uid));
         Utility::debugPrint("target key: " + std::to_string(target_key));
+        Utility::debugPrint("exclusive: " + std::to_string(exclusive));
     }
 
     const auto count = static_cast<uint32_t>(params.configs.size());

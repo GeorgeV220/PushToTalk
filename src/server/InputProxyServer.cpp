@@ -114,12 +114,13 @@ void InputProxyServer::handle_client(int client_fd) {
             }
         }
 
-        for (const auto &[vendor_id, product_id, uid, target_key]: params.configs) {
+        for (const auto &[vendor_id, product_id, uid, target_key, exclusive]: params.configs) {
             Utility::debugPrint("Config:");
             Utility::debugPrint("vendor_id: " + std::to_string(vendor_id));
             Utility::debugPrint("product_id: " + std::to_string(product_id));
             Utility::debugPrint("uid: " + std::to_string(uid));
             Utility::debugPrint("target_key: " + std::to_string(target_key));
+            Utility::debugPrint("exclusive: " + std::to_string(exclusive));
         }
         const std::vector configs = {
             params.configs

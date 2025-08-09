@@ -20,7 +20,7 @@ public:
 
     void clear_devices();
 
-    void add_device(uint16_t vendor_id, uint16_t product_id, uint32_t uid, int target_key);
+    void add_device(uint16_t vendor_id, uint16_t product_id, uint32_t uid, int target_key, bool exclusive = false);
 
 private:
     std::vector<DeviceConfig> configs_;

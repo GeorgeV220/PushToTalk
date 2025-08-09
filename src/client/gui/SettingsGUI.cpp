@@ -15,12 +15,19 @@
 std::mutex gtk_mutex;
 GtkWidget *SettingsGUI::settingsWindow = nullptr;
 GtkWidget *deviceBox = nullptr;
-std::vector<std::pair<GtkWidget *, GtkWidget *>> deviceEntries;
+
+struct DeviceRow {
+    GtkWidget *deviceEntry;
+    GtkWidget *buttonEntry;
+    GtkWidget *exclusiveCheck;
+};
+
+std::vector<DeviceRow> deviceEntries;
 
 void removeDeviceRow([[maybe_unused]] GtkButton *button, gpointer user_data) {
     GtkWidget *row = GTK_WIDGET(user_data);
-    std::input_or_output_iterator auto it = std::ranges::remove_if(deviceEntries, [row](const auto &entry) {
-        return gtk_widget_get_parent(entry.first) == row;
+    const auto it = std::ranges::remove_if(deviceEntries, [row](const auto &entry) {
+        return gtk_widget_get_parent(entry.deviceEntry) == row;
     }).begin();
     deviceEntries.erase(it, deviceEntries.end());
     gtk_container_remove(GTK_CONTAINER(deviceBox), row);
@@ -30,6 +37,7 @@ void onAddDeviceClicked(GtkButton *, gpointer) {
     GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     GtkWidget *deviceEntry = gtk_entry_new();
     GtkWidget *buttonEntry = gtk_entry_new();
+    GtkWidget *exclusiveCheck = gtk_check_button_new_with_label("Exclusive");
 
     gtk_entry_set_placeholder_text(GTK_ENTRY(deviceEntry), "vendor:product:uid");
     gtk_entry_set_placeholder_text(GTK_ENTRY(buttonEntry), "button");
@@ -40,10 +48,11 @@ void onAddDeviceClicked(GtkButton *, gpointer) {
 
     gtk_box_pack_start(GTK_BOX(row), deviceEntry, TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(row), buttonEntry, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(row), exclusiveCheck, FALSE, FALSE, 0); // add checkbox
     gtk_box_pack_start(GTK_BOX(row), removeBtn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(deviceBox), row, FALSE, FALSE, 0);
 
-    deviceEntries.emplace_back(deviceEntry, buttonEntry);
+    deviceEntries.push_back({deviceEntry, buttonEntry, exclusiveCheck});
     gtk_widget_show_all(deviceBox);
 }
 
@@ -87,14 +96,19 @@ gboolean onSaveSettings(gpointer) {
     std::lock_guard lock(gtk_mutex);
     std::vector<DeviceSettings> devices;
 
-    for (const auto &[deviceEntry, buttonEntry]: deviceEntries) {
+    for (const auto &[deviceEntry, buttonEntry, exclusiveCheck]: deviceEntries) {
         const std::string deviceStr = gtk_entry_get_text(GTK_ENTRY(deviceEntry));
         const IntConversionResult buttonRes = safeStrToInt(gtk_entry_get_text(GTK_ENTRY(buttonEntry)));
         if (!buttonRes.success) {
             Utility::error("Invalid button value.");
             return G_SOURCE_REMOVE;
         }
-        devices.push_back({deviceStr, buttonRes.value});
+
+        devices.push_back(DeviceSettings{
+            deviceStr,
+            buttonRes.value,
+            static_cast<bool>(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(exclusiveCheck)))
+        });
     }
 
     auto get_entry_text = [](GtkWidget *window, const char *key) {
@@ -113,11 +127,11 @@ gboolean onSaveSettings(gpointer) {
         Settings::settings.rate = safeStrToInt(get_entry_text(SettingsGUI::settingsWindow, "rate")).value;
         Settings::settings.channels = safeStrToInt(get_entry_text(SettingsGUI::settingsWindow, "channels")).value;
         Settings::settings.buffer_frames = safeStrToInt(
-                get_entry_text(SettingsGUI::settingsWindow, "bufferFrames")).value;
+            get_entry_text(SettingsGUI::settingsWindow, "bufferFrames")).value;
         Settings::settings.capture_buffer_size = safeStrToInt(
-                get_entry_text(SettingsGUI::settingsWindow, "captureBufferSize")).value;
+            get_entry_text(SettingsGUI::settingsWindow, "captureBufferSize")).value;
         Settings::settings.playback_buffer_size = safeStrToInt(
-                get_entry_text(SettingsGUI::settingsWindow, "playbackBufferSize")).value;
+            get_entry_text(SettingsGUI::settingsWindow, "playbackBufferSize")).value;
     } catch (...) {
         Utility::error("One or more fields have invalid values.");
         return G_SOURCE_REMOVE;
@@ -155,13 +169,15 @@ void SettingsGUI::showSettingsGui() {
     deviceBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
     gtk_box_pack_start(GTK_BOX(deviceTab), deviceBox, TRUE, TRUE, 0);
 
-    for (const auto &[deviceStr, button]: Settings::settings.devices) {
+    for (const auto &[deviceStr, button, exclusive]: Settings::settings.devices) {
         GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
         GtkWidget *deviceEntry = gtk_entry_new();
         GtkWidget *buttonEntry = gtk_entry_new();
+        GtkWidget *exclusiveCheck = gtk_check_button_new_with_label("Exclusive");
 
         gtk_entry_set_text(GTK_ENTRY(deviceEntry), deviceStr.c_str());
         gtk_entry_set_text(GTK_ENTRY(buttonEntry), std::to_string(button).c_str());
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(exclusiveCheck), exclusive);
 
         GtkWidget *removeBtn = gtk_button_new_from_icon_name("window-close", GTK_ICON_SIZE_BUTTON);
         gtk_widget_set_tooltip_text(removeBtn, "Remove this device");
@@ -169,10 +185,11 @@ void SettingsGUI::showSettingsGui() {
 
         gtk_box_pack_start(GTK_BOX(row), deviceEntry, TRUE, TRUE, 0);
         gtk_box_pack_start(GTK_BOX(row), buttonEntry, FALSE, FALSE, 0);
+        gtk_box_pack_start(GTK_BOX(row), exclusiveCheck, FALSE, FALSE, 0);
         gtk_box_pack_start(GTK_BOX(row), removeBtn, FALSE, FALSE, 0);
         gtk_box_pack_start(GTK_BOX(deviceBox), row, FALSE, FALSE, 0);
 
-        deviceEntries.emplace_back(deviceEntry, buttonEntry);
+        deviceEntries.push_back({deviceEntry, buttonEntry, exclusiveCheck});
     }
 
     GtkWidget *addDeviceBtn = gtk_button_new_with_label("➕ Add Device");
@@ -220,15 +237,15 @@ void SettingsGUI::showSettingsGui() {
 
     GtkWidget *saveBtn = gtk_button_new_with_label("💾 Save");
     g_signal_connect(saveBtn, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) {
-        gdk_threads_add_idle(onSaveSettings, nullptr);
-    }), NULL);
+                         gdk_threads_add_idle(onSaveSettings, nullptr);
+                         }), NULL);
 
     GtkWidget *saveCloseBtn = gtk_button_new_with_label("💾 Save and Close");
     g_signal_connect(saveCloseBtn, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) {
-        onSaveSettings(nullptr);
-        gtk_widget_hide(SettingsGUI::settingsWindow);
-        return FALSE;
-    }), NULL);
+                         onSaveSettings(nullptr);
+                         gtk_widget_hide(SettingsGUI::settingsWindow);
+                         return FALSE;
+                         }), NULL);
 
     gtk_box_pack_end(GTK_BOX(buttonBox), saveCloseBtn, FALSE, FALSE, 0);
     gtk_box_pack_end(GTK_BOX(buttonBox), saveBtn, FALSE, FALSE, 0);
@@ -237,9 +254,9 @@ void SettingsGUI::showSettingsGui() {
 
 
     g_signal_connect(settingsWindow, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer) {
-        settingsWindow = nullptr;
-        deviceEntries.clear();
-    }), NULL);
+                         settingsWindow = nullptr;
+                         deviceEntries.clear();
+                         }), NULL);
 
     gtk_widget_show_all(settingsWindow);
 }

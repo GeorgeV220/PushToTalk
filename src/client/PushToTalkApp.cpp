@@ -42,9 +42,9 @@ void PushToTalkApp::initializeGtk(int argc, char *argv[]) {
 
 void PushToTalkApp::createTrayIcon() {
     AppIndicator *indicator = app_indicator_new(
-            "push-to-talk-indicator",
-            "system-run",
-            APP_INDICATOR_CATEGORY_APPLICATION_STATUS
+        "push-to-talk-indicator",
+        "system-run",
+        APP_INDICATOR_CATEGORY_APPLICATION_STATUS
     );
     app_indicator_set_status(indicator, APP_INDICATOR_STATUS_ACTIVE);
 
@@ -56,9 +56,9 @@ void PushToTalkApp::createTrayIcon() {
 
     GtkWidget *reload = gtk_menu_item_new_with_label("Reload Client");
     g_signal_connect(reload, "activate", G_CALLBACK([]() {
-        auto &ptt_app = PushToTalkApp::getInstance();
-        ptt_app.reload();
-    }), this);
+                         auto &ptt_app = PushToTalkApp::getInstance();
+                         ptt_app.reload();
+                         }), this);
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), reload);
 
     GtkWidget *separator = gtk_separator_menu_item_new();
@@ -88,15 +88,15 @@ void PushToTalkApp::run() {
 
     for (const DeviceSettings &device_settings: Settings::settings.devices) {
         client_.add_device(device_settings.getVendorID(), device_settings.getProductID(),
-                           device_settings.getDeviceUID(), device_settings.button);
+                           device_settings.getDeviceUID(), device_settings.button, device_settings.exclusive);
     }
     try {
         client_.set_callback([](const bool pressed) {
             Utility::debugPrint(
-                    "Button " + std::string(
-                            pressed ? "pressed" : "released"));
+                "Button " + std::string(
+                    pressed ? "pressed" : "released"));
             AudioUtilities::playSound(
-                    (!pressed ? Settings::settings.sPttOffPath : Settings::settings.sPttOnPath).c_str());
+                (!pressed ? Settings::settings.sPttOffPath : Settings::settings.sPttOnPath).c_str());
             AudioUtilities::setMicMute(!pressed);
         });
 
@@ -137,7 +137,7 @@ void PushToTalkApp::reload() {
     Utility::print("Reloading client...");
     client_.clear_devices();
     for (const auto &dev: Settings::settings.devices)
-        client_.add_device(dev.getVendorID(), dev.getProductID(), dev.getDeviceUID(), dev.button);
+        client_.add_device(dev.getVendorID(), dev.getProductID(), dev.getDeviceUID(), dev.button, dev.exclusive);
     client_.restart();
 
     virtualMicrophone_.set_audio_config(Settings::settings.rate, Settings::settings.channels,

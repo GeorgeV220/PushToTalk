@@ -41,6 +41,7 @@ private:
         int fd_physical = -1;
         int ufd = -1;
         int target_key = -1;
+        bool exclusive = false;
         std::atomic<bool> running{false};
         std::thread listener_thread;
 

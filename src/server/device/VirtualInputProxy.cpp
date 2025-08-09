@@ -53,19 +53,19 @@ void VirtualInputProxy::retry_failed_configs() {
 
 
 void VirtualInputProxy::add_device(const DeviceConfig &config) {
-    const auto &[vendor_id, product_id, uid, target_key] = config;
+    const auto &[vendor_id, product_id, uid, target_key, exclusive] = config;
     const std::string device_path = find_device_path(vendor_id, product_id, uid);
     if (device_path.empty()) {
         add_failed_config(config);
 
         Utility::error(
-                "Failed to find input device: " + std::to_string(vendor_id) + ":" + std::to_string(product_id) + ":" +
-                std::to_string(uid)
+            "Failed to find input device: " + std::to_string(vendor_id) + ":" + std::to_string(product_id) + ":" +
+            std::to_string(uid)
         );
         return;
     }
 
-    const int fd_physical = open(device_path.c_str(), O_RDWR);
+    const int fd_physical = open(device_path.c_str(), O_RDONLY | O_NONBLOCK);
     if (fd_physical < 0) {
         add_failed_config(config);
 
@@ -73,22 +73,23 @@ void VirtualInputProxy::add_device(const DeviceConfig &config) {
         return;
     }
 
-    if (ioctl(fd_physical, EVIOCGRAB, 1) < 0) {
-        add_failed_config(config);
+    int ufd = -1;
+    if (exclusive) {
+        if (ioctl(fd_physical, EVIOCGRAB, 1) < 0) {
+            add_failed_config(config);
+            close(fd_physical);
+            Utility::error("Failed to grab physical device: " + device_path);
+            return;
+        }
 
-        close(fd_physical);
-        Utility::error("Failed to grab physical device: " + device_path);
-        return;
-    }
-
-    const int ufd = create_virtual_device(fd_physical);
-    if (ufd < 0) {
-        add_failed_config(config);
-
-        ioctl(fd_physical, EVIOCGRAB, 0);
-        close(fd_physical);
-        Utility::error("Failed to create virtual device for: " + device_path);
-        return;
+        ufd = create_virtual_device(fd_physical);
+        if (ufd < 0) {
+            add_failed_config(config);
+            ioctl(fd_physical, EVIOCGRAB, 0);
+            close(fd_physical);
+            Utility::error("Failed to create virtual device for: " + device_path);
+            return;
+        }
     }
 
     remove_failed_config(config);
@@ -98,6 +99,7 @@ void VirtualInputProxy::add_device(const DeviceConfig &config) {
     ctx.ufd = ufd;
     ctx.target_key = target_key;
     ctx.running = false;
+    ctx.exclusive = exclusive;
 
     contexts_.push_back(std::move(ctx));
 }
@@ -309,8 +311,8 @@ bool VirtualInputProxy::setup_capabilities(const int physical_fd, const int ufd)
                 Utility::error("UI_SET_EVBIT failed for event type " + std::to_string(ev) + ": " +
                                std::string(strerror(errno)));
                 throw std::runtime_error(
-                        "UI_SET_EVBIT failed for event type " + std::to_string(ev) + ": " +
-                        std::string(strerror(errno)));
+                    "UI_SET_EVBIT failed for event type " + std::to_string(ev) + ": " +
+                    std::string(strerror(errno)));
             }
             if (ev == EV_FF) {
                 has_ff = true;
@@ -328,8 +330,8 @@ void VirtualInputProxy::setup_event_codes(const int physical_fd, const int ufd, 
 
     if (ioctl(physical_fd, EVIOCGBIT(ev_type, sizeof(codes)), codes) < 0) {
         throw std::runtime_error(
-                "Failed to get event codes for ev_type " + std::to_string(ev_type) + ": " +
-                std::string(strerror(errno)));
+            "Failed to get event codes for ev_type " + std::to_string(ev_type) + ": " +
+            std::string(strerror(errno)));
     }
 
     for (int code = 0; code < max_code; ++code) {
@@ -419,7 +421,7 @@ void VirtualInputProxy::set_virtual_bit(const int ufd, const int ev_type, const 
 void VirtualInputProxy::handle_event(const DeviceContext &ctx, const input_event &ev) const {
     if (ev.type == EV_KEY && ev.code == ctx.target_key) {
         if (callback_) callback_(ctx.target_key, ev.value);
-    } else {
+    } else if (ctx.ufd >= 0) {
         Utility::safe_write(ctx.ufd, &ev, sizeof(ev));
     }
 }
@@ -480,12 +482,12 @@ void VirtualInputProxy::detect_devices() {
                         }
                         std::ostringstream oss;
                         oss << "Key pressed: 0x" << std::hex << ev.code << "\n"
-                            << "Device: " << device_paths[i] << "\n"
-                            << "Vendor: 0x" << std::setw(4) << std::setfill('0') << vendor << "\n"
-                            << "Product: 0x" << std::setw(4) << std::setfill('0') << product << "\n"
-                            << "UID: 0x" << std::setw(8) << std::setfill('0') << DeviceUtils::generate_uid(caps) <<
-                            "\n"
-                            << "Name: " << caps.name << "\n";
+                                << "Device: " << device_paths[i] << "\n"
+                                << "Vendor: 0x" << std::setw(4) << std::setfill('0') << vendor << "\n"
+                                << "Product: 0x" << std::setw(4) << std::setfill('0') << product << "\n"
+                                << "UID: 0x" << std::setw(8) << std::setfill('0') << DeviceUtils::generate_uid(caps) <<
+                                "\n"
+                                << "Name: " << caps.name << "\n";
                         Utility::print(oss.str());
 
                         std::ostringstream hex_oss;

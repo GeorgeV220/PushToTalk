@@ -11,6 +11,7 @@
 struct DeviceSettings {
     std::string deviceStr;
     int button;
+    bool exclusive;
 
     [[nodiscard]] uint32_t getVendorID() const {
         const auto result = safeStrToUInt32(Utility::split(deviceStr, ':')[0]);

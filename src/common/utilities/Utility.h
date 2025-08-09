@@ -11,6 +11,7 @@ struct DeviceConfig {
     uint16_t product_id;
     uint32_t uid;
     int target_key;
+    bool exclusive;
 };
 
 struct InitParams {

@@ -72,4 +72,6 @@ StringConversionResult safeUInt32ToStr(uint32_t value);
 
 StringConversionResult safeFloatToStr(float value);
 
+bool safeStrToBool(const std::string &str);
+
 #endif // CONVERSION_H

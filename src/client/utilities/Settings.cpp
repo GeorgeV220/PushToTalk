@@ -49,6 +49,7 @@ void Settings::saveSettings() {
     for (size_t i = 0; i < devices.size(); ++i) {
         file << "device" << i << " = " << devices[i].deviceStr << "\n";
         file << "button" << i << " = " << devices[i].button << "\n";
+        file << "exclusive" << i << " = " << devices[i].exclusive << "\n";
     }
     file << "pttonpath = " << sPttOnPath << "\n";
     file << "pttoffpath = " << sPttOffPath << "\n";
@@ -86,6 +87,11 @@ void Settings::loadSettings() {
             auto valueResult = safeStrToInt(value);
             if (indexResult.success && valueResult.success && indexResult.value >= 0) {
                 tempDevices[indexResult.value].button = valueResult.value;
+            }
+        } else if (key.starts_with("exclusive")) {
+            auto indexResult = safeStrToInt(key.substr(9));
+            if (indexResult.success && indexResult.value >= 0) {
+                tempDevices[indexResult.value].exclusive = safeStrToBool(value);
             }
         } else if (key == "pttonpath") {
             sPttOnPath = value;

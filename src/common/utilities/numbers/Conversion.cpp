@@ -1,5 +1,6 @@
 #include "Conversion.h"
 
+#include <algorithm>
 #include <ios>
 #include <string>
 #include <stdexcept>
@@ -120,4 +121,11 @@ StringConversionResult safeFloatToStr(const float value) {
         result.success = false;
     }
     return result;
+}
+
+bool safeStrToBool(const std::string &s) {
+    std::string str = s;
+    std::ranges::transform(str, str.begin(),
+                           [](const unsigned char c) { return std::tolower(c); });
+    return (str == "true" || str == "1" || str == "yes" || str == "on");
 }
