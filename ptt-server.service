@@ -5,7 +5,6 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=/usr/bin/ptt-server
-Environment=SUDO_USER=__USERNAME__
 User=root
 Restart=on-failure
 

@@ -1,5 +1,6 @@
 #include "InputProxyServer.h"
 
+#include <grp.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
@@ -13,6 +14,8 @@
 #include "device/VirtualInputProxy.h"
 
 #define SOCKET_PATH "/tmp/input_proxy.sock"
+#define CONTROL_GROUP "ptt"
+
 
 void InputProxyServer::run() {
     setup_socket();
@@ -30,28 +33,40 @@ void InputProxyServer::setup_socket() {
     strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
 
     unlink(SOCKET_PATH);
-    if (bind(sock_fd_, reinterpret_cast<sockaddr *>(&addr), sizeof(addr))) {
-        shutdown(sock_fd_, SHUT_RDWR);
+    if (bind(sock_fd_, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0) {
         close(sock_fd_);
         throw std::runtime_error("Bind failed: " + std::string(strerror(errno)));
     }
 
-    const UserInfo user = Utility::get_active_user_info();
+    const group *grp = getgrnam(CONTROL_GROUP);
+    if (!grp) {
+        Utility::print("Group '" CONTROL_GROUP "' not found, creating it...");
+        if (const int ret = system("groupadd " CONTROL_GROUP); ret != 0) {
+            close(sock_fd_);
+            throw std::runtime_error("Failed to create group '" CONTROL_GROUP "'");
+        }
+        grp = getgrnam(CONTROL_GROUP);
+        if (!grp) {
+            close(sock_fd_);
+            throw std::runtime_error("Group '" CONTROL_GROUP "' creation failed");
+        }
+    }
 
-    if (chown(SOCKET_PATH, user.uid, user.gid) < 0) {
+    if (chown(SOCKET_PATH, -1, grp->gr_gid) < 0) {
+        close(sock_fd_);
         throw std::runtime_error("chown failed: " + std::string(strerror(errno)));
     }
-    Utility::print("Socket ownership changed to " + std::to_string(user.uid) + ":" + std::to_string(user.gid));
 
     if (chmod(SOCKET_PATH, 0660) < 0) {
+        close(sock_fd_);
         throw std::runtime_error("chmod failed: " + std::string(strerror(errno)));
     }
 
-    if (listen(sock_fd_, 5)) {
-        shutdown(sock_fd_, SHUT_RDWR);
+    if (listen(sock_fd_, 5) < 0) {
         close(sock_fd_);
         throw std::runtime_error("Listen failed: " + std::string(strerror(errno)));
     }
+    Utility::print("Listening on " SOCKET_PATH);
 }
 
 [[noreturn]] void InputProxyServer::accept_connections() const {
@@ -89,10 +104,6 @@ void InputProxyServer::handle_client(int client_fd) {
 
         if (getsockopt(client_fd, SOL_SOCKET, SO_PEERCRED, &cred, &len)) {
             throw std::runtime_error("Failed to get client credentials: " + std::string(strerror(errno)));
-        }
-
-        if (cred.uid != Utility::get_active_user_info().uid) {
-            throw std::runtime_error("Unauthorized client UID");
         }
 
         uint32_t count;

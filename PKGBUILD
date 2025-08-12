@@ -25,6 +25,6 @@ package() {
   install -Dm755 "$srcdir/$pkgname/build/ptt-client" "$pkgdir/usr/bin/ptt-client"
   install -Dm755 "$srcdir/$pkgname/build/ptt-server" "$pkgdir/usr/bin/ptt-server"
 
-  install -Dm644 "$srcdir/ptt-server.service.in" "$pkgdir/usr/lib/systemd/system/ptt-server.service"
+  install -Dm644 "$srcdir/ptt-server.service" "$pkgdir/usr/lib/systemd/system/ptt-server.service"
   install -Dm644 "$srcdir/ptt-client.service" "$pkgdir/usr/lib/systemd/user/ptt-client.service"
 }
