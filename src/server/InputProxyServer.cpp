@@ -3,7 +3,6 @@
 #include <grp.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/uio.h>
 #include <unistd.h>
 #include <cstring>
 #include <stdexcept>
@@ -12,10 +11,9 @@
 
 #include "common/utilities/Utility.h"
 #include "device/VirtualInputProxy.h"
+#include "common/protocol/Packets.h"
 
-#define SOCKET_PATH "/tmp/input_proxy.sock"
 #define CONTROL_GROUP "ptt"
-
 
 void InputProxyServer::run() {
     setup_socket();
@@ -106,26 +104,34 @@ void InputProxyServer::handle_client(int client_fd) {
             throw std::runtime_error("Failed to get client credentials: " + std::string(strerror(errno)));
         }
 
-        uint32_t count;
-        if (Utility::safe_read(client_fd, &count, sizeof(count)) != sizeof(count)) {
-            throw std::runtime_error("Failed to read config count");
+        PacketHeader hdr{};
+        std::vector<uint8_t> payload;
+        if (!read_packet(client_fd, hdr, payload)) {
+            throw std::runtime_error("Failed to read HAND_SHAKE packet");
+        }
+        if (hdr.channel != static_cast<uint16_t>(Channel::Control) ||
+            hdr.type != static_cast<uint16_t>(ControlType::HAND_SHAKE)) {
+            throw std::runtime_error("Expected HAND_SHAKE packet");
         }
 
-        if (count > 1000) {
-            throw std::runtime_error("Too many configs from client");
+        send_ack(client_fd);
+
+        if (!read_packet(client_fd, hdr, payload)) {
+            throw std::runtime_error("Failed to read CONFIG_LIST packet");
+        }
+        if (hdr.channel != static_cast<uint16_t>(Channel::Control) ||
+            hdr.type != static_cast<uint16_t>(ControlType::CONFIG_LIST)) {
+            throw std::runtime_error("Expected CONFIG_LIST packet");
         }
 
-        InitParams params = {};
-        params.configs.resize(count);
-
-        for (uint32_t i = 0; i < count; ++i) {
-            Utility::debugPrint("Reading config " + std::to_string(i));
-            if (Utility::safe_read(client_fd, &params.configs[i], sizeof(DeviceConfig)) != sizeof(DeviceConfig)) {
-                throw std::runtime_error("Failed to read device config");
-            }
+        if (payload.size() % sizeof(DeviceConfig) != 0) {
+            throw std::runtime_error("Invalid CONFIG_LIST payload size");
         }
 
-        for (const auto &[vendor_id, product_id, uid, target_key, exclusive]: params.configs) {
+        std::vector<DeviceConfig> configs(payload.size() / sizeof(DeviceConfig));
+        std::memcpy(configs.data(), payload.data(), payload.size());
+
+        for (const auto &[vendor_id, product_id, uid, target_key, exclusive]: configs) {
             Utility::debugPrint("Config:");
             Utility::debugPrint("vendor_id: " + std::to_string(vendor_id));
             Utility::debugPrint("product_id: " + std::to_string(product_id));
@@ -133,44 +139,33 @@ void InputProxyServer::handle_client(int client_fd) {
             Utility::debugPrint("target_key: " + std::to_string(target_key));
             Utility::debugPrint("exclusive: " + std::to_string(exclusive));
         }
-        const std::vector configs = {
-            params.configs
-        };
+
+        send_ack(client_fd);
 
         VirtualInputProxy proxy;
         for (const auto &config: configs) {
             proxy.add_device(config);
         }
         proxy.set_callback([client_fd](const int key, const bool state) {
-            Utility::debugPrint(
-                "Sending event for key " + std::to_string(key) + " to client " + std::to_string(client_fd));
-            if (Utility::safe_write(client_fd, &state, sizeof(state)) != sizeof(state)) {
-                Utility::error(
-                    "Failed to send event to client " + std::to_string(client_fd) + ": " + std::string(
-                        strerror(errno)));
-            }
+            send_key_event(client_fd, key, state);
         });
         proxy.start();
 
-        fd_set read_fds;
-        char buf;
         while (true) {
-            FD_ZERO(&read_fds);
-            FD_SET(client_fd, &read_fds);
-
-            if (const int ret = select(client_fd + 1, &read_fds, nullptr, nullptr, nullptr); ret < 0) {
-                Utility::error("select() failed: " + std::string(strerror(errno)));
+            if (!read_packet(client_fd, hdr, payload)) {
+                Utility::print("Client disconnected");
                 break;
             }
 
-            if (FD_ISSET(client_fd, &read_fds)) {
-                const ssize_t n = Utility::safe_read(client_fd, &buf, sizeof(buf));
-                if (n == 0) {
-                    break;
-                }
-                if (n < 0) {
-                    Utility::error("Error reading from client: " + std::string(strerror(errno)));
-                    break;
+            if (hdr.channel == static_cast<uint16_t>(Channel::Control)) {
+                switch (static_cast<ControlType>(hdr.type)) {
+                    case ControlType::PING:
+                        write_packet(client_fd, Channel::Control, static_cast<uint16_t>(ControlType::PONG),
+                                     nullptr, 0);
+                        break;
+                    default:
+                        Utility::debugPrint("Unhandled control packet: " + std::to_string(hdr.type));
+                        break;
                 }
             }
         }

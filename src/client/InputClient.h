@@ -29,6 +29,11 @@ private:
     std::thread listener_thread_;
     std::atomic<bool> running_{false};
     std::function<void(bool)> callback_;
+
+
+    static bool wait_for_ack(int fd);
+
+    int connect_and_handshake() const;
 };
 
 #endif //INPUTCLIENT_H

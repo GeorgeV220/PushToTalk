@@ -28,6 +28,7 @@ set(SHARED_SOURCES
         src/common/utilities/numbers/Conversion.h
         src/common/device/DeviceCapabilities.cpp
         src/common/device/DeviceCapabilities.h
+        src/common/protocol/Packets.h
 )
 
 # --- Client Executable ---

@@ -68,22 +68,50 @@ void Utility::pError(const std::string &message) {
     }
 }
 
-// TODO switch to nss
+
 UserInfo Utility::get_active_user_info() {
     const char *sudoUser = getenv("SUDO_USER");
     const uid_t uid = getuid();
 
-    if (sudoUser) {
-        if (const passwd *pw = getpwnam(sudoUser)) {
-            return {sudoUser, pw->pw_dir, pw->pw_uid, pw->pw_gid};
+    auto lookup_by_name = [](const char *name) -> UserInfo {
+        struct passwd pwd{};
+        struct passwd *result = nullptr;
+        std::vector<char> buf(1024);
+
+        while (true) {
+            if (const int ret = getpwnam_r(name, &pwd, buf.data(), buf.size(), &result); ret == 0 && result) {
+                return {pwd.pw_name, pwd.pw_dir, pwd.pw_uid, pwd.pw_gid};
+            } else if (ret == ERANGE) {
+                buf.resize(buf.size() * 2);
+            } else {
+                break;
+            }
         }
+        throw std::runtime_error("Failed to lookup user by name: " + std::string(name));
+    };
+
+    auto lookup_by_uid = [](const uid_t uid_) -> UserInfo {
+        struct passwd pwd{};
+        struct passwd *result = nullptr;
+        std::vector<char> buf(1024);
+
+        while (true) {
+            if (const int ret = getpwuid_r(uid_, &pwd, buf.data(), buf.size(), &result); ret == 0 && result) {
+                return {pwd.pw_name, pwd.pw_dir, pwd.pw_uid, pwd.pw_gid};
+            } else if (ret == ERANGE) {
+                buf.resize(buf.size() * 2);
+            } else {
+                break;
+            }
+        }
+        throw std::runtime_error("Failed to lookup user by UID: " + std::to_string(uid_));
+    };
+
+    if (sudoUser) {
+        return lookup_by_name(sudoUser);
     }
 
-    if (const passwd *pw = getpwuid(uid)) {
-        return {pw->pw_name, pw->pw_dir, uid, pw->pw_gid};
-    }
-
-    throw std::runtime_error("Failed to determine user info");
+    return lookup_by_uid(uid);
 }
 
 /**
