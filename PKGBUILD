@@ -8,10 +8,9 @@ url="https://example.com"
 license=('MIT')
 depends=('gtk3' 'libpulse' 'openal' 'zlib' 'mpg123' 'libappindicator-gtk3')
 makedepends=('cmake')
-install=pushtotalk.install
 source=(
   "$pkgname::git+https://github.com/GeorgeV220/PushToTalk.git"
-  "ptt-server.service.in"
+  "ptt-server.service"
   "ptt-client.service"
 )
 md5sums=('SKIP' 'SKIP' 'SKIP')
